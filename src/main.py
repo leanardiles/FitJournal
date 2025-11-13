@@ -977,34 +977,34 @@ def mark_workout_as_complete():
 
 
 # Reading the API key
-with open('open_ai_key.csv', 'r') as api_file:
-    openai.api_key = api_file.read().strip()
+#with open('open_ai_key.csv', 'r') as api_file:
+#    openai.api_key = api_file.read().strip()
 
-def get_AI_workout_of_the_day():
-    global user_schedule
+# def get_AI_workout_of_the_day():
+#     global user_schedule
     
-    # Format the user_schedule as a string before passing it to the OpenAI API
-    schedule_str = json.dumps(list(user_schedule)[0]) # This converts the first element of user_schedule (which is the current day for workout of the day) dictionary to a string
+#     # Format the user_schedule as a string before passing it to the OpenAI API
+#     schedule_str = json.dumps(list(user_schedule)[0]) # This converts the first element of user_schedule (which is the current day for workout of the day) dictionary to a string
 
-    # Making exercises dictionary readable by the prompt
-    simplified_exercises = {
-        muscle_group: [exercise.name for exercise in exercises]
-        for muscle_group, exercises in exercises_dictionary.items()
-    }
-    exercises_json = json.dumps(simplified_exercises)
+#     # Making exercises dictionary readable by the prompt
+#     simplified_exercises = {
+#         muscle_group: [exercise.name for exercise in exercises]
+#         for muscle_group, exercises in exercises_dictionary.items()
+#     }
+#     exercises_json = json.dumps(simplified_exercises)
     
-    response = openai.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a fitness coach."},
-            {"role": "user", "content": f"Propose a workout based on the user's current routine, which is stored in the following dictionary: {schedule_str}. I want the workout routine to consist of 3 exercises for each muscle group indicated in the user routine. In your suggestion, exclude the exercises listed in {exercises_json} so that the user always gets new exercises. Also, do not end the suggestion asking questions to the user."}
-        ]
-    )
+#     response = openai.chat.completions.create(
+#         model="gpt-4",
+#         messages=[
+#             {"role": "system", "content": "You are a fitness coach."},
+#             {"role": "user", "content": f"Propose a workout based on the user's current routine, which is stored in the following dictionary: {schedule_str}. I want the workout routine to consist of 3 exercises for each muscle group indicated in the user routine. In your suggestion, exclude the exercises listed in {exercises_json} so that the user always gets new exercises. Also, do not end the suggestion asking questions to the user."}
+#         ]
+#     )
 
-    # Access the response content correctly
-    print("AI WORKOUT SUGGESTION 🦾")
-    print(response.choices[0].message.content)
-    print()
+#     # Access the response content correctly
+#     print("AI WORKOUT SUGGESTION 🦾")
+#     print(response.choices[0].message.content)
+#     print()
 
 
 
