@@ -1,5 +1,6 @@
 body {
-    background-color: var(--main-background);
+    background-color: #171717;
+    /*background-color: var(--main-background);*/
     min-height: 100vh;
 }
 
