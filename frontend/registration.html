@@ -8,6 +8,44 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Content will go here -->
+    <div class="row flex-middle margin-top-small">
+        <!-- Left side: Registration form in container -->
+        <div class="col sm-5">
+            <div class="paper">
+                <h5>Start your fitness journey</h5>
+                <h3>Sign Up to FitJournal</h3>
+                
+                <form id="registration-form">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" placeholder="your@email.com" class="input-block" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" placeholder="Your password" class="input-block" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm-password">Repeat Password</label>
+                        <input type="password" id="confirm-password" name="confirm_password" placeholder="Repeat your password" class="input-block" required>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary btn-block">Create Account</button>
+                </form>
+                
+                <p class="margin-top">
+                    Already have an account? <a href="login.html">Log in here</a>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Right side: Logo (outside container) -->
+        <div class="col sm-7 text-center">
+            <img src="images/logo complete halfway.png" alt="FitJournal logo complete" class="no-border" style="max-width: 400px";">
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
 </body>
 </html>
