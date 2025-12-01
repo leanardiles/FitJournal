@@ -8,15 +8,14 @@ from database import engine, get_db
 from passlib.context import CryptContext
 
 
-#Legacy modules
-import random
-import sys
-import openai
-import os #to interact with the operating system. In this case, it's used to access environment variables
-import getpass
-import json
-from datetime import datetime
-from collections import deque
+# #Legacy modules: DELETE?
+# import random
+# import sys
+# import os #to interact with the operating system. In this case, it's used to access environment variables
+# import getpass
+# import json
+# from datetime import datetime
+# from collections import deque
 
 
 # Create database tables (if they don't exist)
