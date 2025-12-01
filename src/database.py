@@ -1,76 +1,78 @@
-import mysql.connector #the tool that connects to Aiven MySQL database
-from mysql.connector import Error, pooling #the Error class catches and handles database errors (like "connection failed" or "wrong password")
-import os #needed to read environment variables (like your database password from .env
-from dotenv import load_dotenv # Imports a function that reads .env files so the code can access DB_HOST, DB_PASSWORD, etc. from the .env file
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
 # Database configuration
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'database': os.getenv('DB_NAME'),
-    'ssl_disabled': False  # Aiven requires SSL
-}
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT', '3306')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_NAME = os.getenv('DB_NAME')
 
-# Connection pool
-connection_pool = pooling.MySQLConnectionPool(
-    pool_name="fitjournal_pool",
-    pool_size=5,
-    pool_reset_session=True,
-    **DB_CONFIG
+# Create database URL for SQLAlchemy
+# Format: mysql+pymysql://user:password@host:port/database
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Create SQLAlchemy engine
+# echo=True shows SQL queries in console (useful for debugging, set to False in production)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_recycle=3600,   # Recycle connections after 1 hour
+    echo=True            # Set to False in production
 )
 
-def get_db_connection():
-    """
-    Get a database connection from the pool
-    Returns: MySQL connection object
-    """
-    try:
-        connection = connection_pool.get_connection()
-        if connection.is_connected():
-            return connection
-    except Error as e:
-        print(f"Error getting connection from pool: {e}")
-        raise
+# Create SessionLocal class for database sessions
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Base class for SQLAlchemy models
+Base = declarative_base()
+
+# Dependency for FastAPI routes
 def get_db():
     """
-    Dependency for FastAPI routes
-    Yields a database connection and ensures it's closed after use
+    Dependency that provides a database session to FastAPI routes.
+    Automatically closes the session after the request is complete.
+    
+    Usage in routes:
+        @app.get("/users")
+        def get_users(db: Session = Depends(get_db)):
+            users = db.query(User).all()
+            return users
     """
-    connection = get_db_connection()
+    db = SessionLocal()
     try:
-        yield connection
-    except Exception as e:
-        print(f"Database error: {e}")
-        connection.rollback()
-        raise
+        yield db
     finally:
-        if connection.is_connected():
-            connection.close()
+        db.close()
 
+# Test connection function (optional, for debugging)
 def test_connection():
     """
     Test database connection
     Returns True if successful, False otherwise
     """
     try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT VERSION()")
-        version = cursor.fetchone()
-        print(f"Successfully connected to MySQL version: {version[0]}")
-        cursor.close()
+        # Try to connect
+        connection = engine.connect()
+        print("✓ Successfully connected to MySQL database")
+        
+        # Test a simple query
+        result = connection.execute("SELECT VERSION()")
+        version = result.fetchone()
+        print(f"✓ MySQL version: {version[0]}")
+        
         connection.close()
         return True
-    except Error as e:
-        print(f"Error connecting to MySQL: {e}")
+    except Exception as e:
+        print(f"✗ Error connecting to MySQL: {e}")
         return False
 
-# Test connection when module is imported (optional)
+# Test connection when running this file directly
 if __name__ == "__main__":
     test_connection()
