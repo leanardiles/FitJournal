@@ -1,6 +1,5 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, text  # Add 'text' to imports
+from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 from dotenv import load_dotenv
 
@@ -15,16 +14,14 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME')
 
 # Create database URL for SQLAlchemy
-# Format: mysql+pymysql://user:password@host:port/database
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Create SQLAlchemy engine
-# echo=True shows SQL queries in console (useful for debugging, set to False in production)
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # Verify connections before using them
-    pool_recycle=3600,   # Recycle connections after 1 hour
-    echo=True            # Set to False in production
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    echo=True  # Set to False in production
 )
 
 # Create SessionLocal class for database sessions
@@ -38,12 +35,6 @@ def get_db():
     """
     Dependency that provides a database session to FastAPI routes.
     Automatically closes the session after the request is complete.
-    
-    Usage in routes:
-        @app.get("/users")
-        def get_users(db: Session = Depends(get_db)):
-            users = db.query(User).all()
-            return users
     """
     db = SessionLocal()
     try:
@@ -51,7 +42,7 @@ def get_db():
     finally:
         db.close()
 
-# Test connection function (optional, for debugging)
+# Test connection function
 def test_connection():
     """
     Test database connection
@@ -60,17 +51,17 @@ def test_connection():
     try:
         # Try to connect
         connection = engine.connect()
-        print("✓ Successfully connected to MySQL database")
+        print("[SUCCESS] Connected to MySQL database")
         
-        # Test a simple query
-        result = connection.execute("SELECT VERSION()")
+        # Test a simple query - use text() for raw SQL
+        result = connection.execute(text("SELECT VERSION()"))
         version = result.fetchone()
-        print(f"✓ MySQL version: {version[0]}")
+        print(f"[INFO] MySQL version: {version[0]}")
         
         connection.close()
         return True
     except Exception as e:
-        print(f"✗ Error connecting to MySQL: {e}")
+        print(f"[ERROR] Failed to connect to MySQL: {e}")
         return False
 
 # Test connection when running this file directly

@@ -1,0 +1,107 @@
+from sqlalchemy import Column, Integer, String, DECIMAL, Enum, Boolean, TIMESTAMP, ForeignKey, Text, CheckConstraint
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from database import Base
+import enum
+
+# ========== ENUMS ==========
+
+class SexEnum(str, enum.Enum):
+    M = "M"
+    F = "F"
+    NB = "NB"
+
+class UnitPreferenceEnum(str, enum.Enum):
+    metric = "metric"
+    imperial = "imperial"
+
+class MuscleGroupEnum(str, enum.Enum):
+    Biceps = "Biceps"
+    Back = "Back"
+    Triceps = "Triceps"
+    Shoulders = "Shoulders"
+    Legs = "Legs"
+    Glutes = "Glutes"
+    Chest = "Chest"
+    Calves = "Calves"
+    Abs = "Abs"
+
+# ========== MODELS ==========
+
+class User(Base):
+    __tablename__ = "users"
+
+    user_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_email = Column(String(100), unique=True, nullable=False)
+    user_password = Column(String(255), nullable=False)
+    user_first_name = Column(String(50), default=None)
+    user_last_name = Column(String(50), default=None)
+    user_sex = Column(Enum(SexEnum), default=None)
+    user_age = Column(Integer, default=None)
+    user_unit_preference = Column(Enum(UnitPreferenceEnum), default="metric")
+    user_weight = Column(DECIMAL(5, 2), default=None)
+    user_height = Column(Integer, default=None)
+    user_subscription = Column(Integer, default=0)  # TINYINT in MySQL
+    user_is_active = Column(Boolean, default=True)
+    user_created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    user_updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    # Relationships
+    exercises = relationship("Exercise", back_populates="user", cascade="all, delete-orphan")
+    routines = relationship("Routine", back_populates="user", cascade="all, delete-orphan")
+
+    # Table constraints (optional - already enforced by MySQL)
+    __table_args__ = (
+        CheckConstraint('user_age >= 0 AND user_age <= 100', name='check_user_age'),
+        CheckConstraint('user_weight > 0 AND user_weight <= 300', name='check_user_weight'),
+        CheckConstraint('user_height > 0 AND user_height <= 300', name='check_user_height'),
+    )
+
+
+class DefaultExercise(Base):
+    __tablename__ = "default_exercises"
+
+    default_exercise_id = Column(Integer, primary_key=True, autoincrement=True)
+    exercise_name = Column(String(50), nullable=False)
+    exercise_muscle_group = Column(Enum(MuscleGroupEnum), nullable=False)
+    exercise_link = Column(String(500), default=None)
+
+
+class Exercise(Base):
+    __tablename__ = "exercises"
+
+    exercise_id = Column(Integer, primary_key=True, autoincrement=True)
+    exercise_name = Column(String(50), nullable=False)
+    exercise_muscle_group = Column(Enum(MuscleGroupEnum), nullable=False)
+    exercise_user_current_weight = Column(DECIMAL(5, 2), default=None)
+    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    exercise_is_in_routine = Column(Boolean, default=True)
+    exercise_times_performed = Column(Integer, default=0)
+    exercise_link = Column(String(500), default=None)  # Added from ALTER TABLE
+    comments = Column(String(300), default=None)  # Added from ALTER TABLE
+    exercise_created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    exercise_updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    # Relationships
+    user = relationship("User", back_populates="exercises")
+
+    # Table constraint
+    __table_args__ = (
+        CheckConstraint('exercise_user_current_weight >= 0 AND exercise_user_current_weight <= 300', name='check_exercise_weight'),
+    )
+
+
+class Routine(Base):
+    __tablename__ = "routine"
+
+    routine_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    days_per_week = Column(Integer)
+
+    # Relationships
+    user = relationship("User", back_populates="routines")
+
+    # Table constraint
+    __table_args__ = (
+        CheckConstraint('days_per_week > 0 AND days_per_week <= 7', name='check_days_per_week'),
+    )
