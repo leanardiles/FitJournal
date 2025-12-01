@@ -1,9 +1,7 @@
 body {
     background-color: #171717;
-    /*background-color: var(--main-background);*/
     min-height: 100vh;
 }
-
 
 /* Control logo size */
 .col img {
@@ -11,14 +9,19 @@ body {
     margin: 0 auto;
 }
 
-
-/* Reduce top spacing for auth pages */
-.paper.container {
-    margin-top: 1rem;
-}
-
-
 /* Add padding to the row */
 .row {
     padding: 0 2rem;
+}
+
+/* Remove any borders/shadows from elements (if PaperCSS adds them) */
+div {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Ensure form inputs don't have PaperCSS borders */
+.form-group {
+    background: transparent;
+    border: none;
 }
