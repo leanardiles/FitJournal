@@ -11,7 +11,7 @@
     <!-- Navigation Header -->
     <header class="text-center">
         <div class="margin-top">
-            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 80px;">
+            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 90px;">
         </div>
         
         <nav class="margin-top">
@@ -51,6 +51,12 @@
                 <input type="hidden" id="sex" name="sex">
             </div>
             
+            <!-- Age -->
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" class="input-block" placeholder="e.g. 25" step="1" min="0" max="120">
+            </div>
+
             <!-- Preferred Unit -->
             <div class="form-group">
                 <label>Preferred Unit</label>
@@ -63,13 +69,13 @@
             
             <!-- Height -->
             <div class="form-group">
-                <label for="height">Height (cm or inches)</label>
+                <label for="height">Height (cm)</label>
                 <input type="number" id="height" class="input-block" placeholder="170" step="0.01" min="0">
             </div>
             
             <!-- Weight -->
             <div class="form-group">
-                <label for="weight">Weight (kg or lbs)</label>
+                <label for="weight">Weight (kg)</label>
                 <input type="number" id="weight" class="input-block" placeholder="70.50" step="0.01" min="0">
             </div>
             
@@ -96,6 +102,7 @@
                 // Populate form
                 document.getElementById('email').value = profile.user_email;
                 document.getElementById('name').value = profile.user_first_name || '';
+                document.getElementById('age').value = profile.user_age || '';
                 document.getElementById('height').value = profile.user_height || '';
                 document.getElementById('weight').value = profile.user_weight || '';
                 
@@ -111,6 +118,7 @@
                     selectedUnit = profile.user_unit_preference;
                     document.getElementById('unit').value = selectedUnit;
                     highlightUnitButton(selectedUnit);
+                    updateUnitLabels(selectedUnit);
                 }
             }
         });
@@ -140,6 +148,7 @@
                 selectedUnit = e.target.dataset.value;
                 document.getElementById('unit').value = selectedUnit;
                 highlightUnitButton(selectedUnit);
+                updateUnitLabels(selectedUnit);
             });
         });
         
@@ -153,6 +162,20 @@
             });
         }
         
+        // Update height and weight labels based on selected unit
+        function updateUnitLabels(unit) {
+            const heightLabel = document.querySelector('label[for="height"]');
+            const weightLabel = document.querySelector('label[for="weight"]');
+            
+            if (unit === 'metric') {
+                heightLabel.textContent = 'Height (cm)';
+                weightLabel.textContent = 'Weight (kg)';
+            } else {
+                heightLabel.textContent = 'Height (feet)';
+                weightLabel.textContent = 'Weight (lbs)';
+            }
+        }    
+
         // Form submission
         document.getElementById('profile-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -160,6 +183,7 @@
             // Get form values
             const name = document.getElementById('name').value.trim();
             const sex = document.getElementById('sex').value;
+            const age = parseInt(document.getElementById('age').value) || null;
             const unit = document.getElementById('unit').value;
             const height = parseFloat(document.getElementById('height').value) || null;
             const weight = parseFloat(document.getElementById('weight').value) || null;
@@ -168,6 +192,7 @@
             const profileData = {
                 user_first_name: name || null,
                 user_sex: sex || null,
+                user_age: age,  // ✅ ADD THIS
                 user_unit_preference: unit || 'metric',
                 user_height: height,
                 user_weight: weight

@@ -29,6 +29,7 @@ class UserProfileResponse(BaseModel):
     user_email: EmailStr
     user_first_name: Optional[str] = None
     user_sex: Optional[str] = None
+    user_age: Optional[int] = None
     user_unit_preference: Optional[str] = "metric"
     user_height: Optional[float] = None
     user_weight: Optional[float] = None
@@ -39,6 +40,7 @@ class UserProfileResponse(BaseModel):
 class UserProfileUpdate(BaseModel):
     user_first_name: Optional[str] = None
     user_sex: Optional[str] = None  # 'M', 'F', 'NB'
+    user_age: Optional[int] = None
     user_unit_preference: Optional[str] = None  # 'metric', 'imperial'
     user_height: Optional[float] = None
     user_weight: Optional[float] = None

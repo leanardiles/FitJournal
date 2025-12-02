@@ -143,6 +143,8 @@ def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session
         user.user_first_name = profile.user_first_name
     if profile.user_sex is not None:
         user.user_sex = profile.user_sex
+    if profile.user_age is not None:
+        user.user_age = profile.user_age    
     if profile.user_unit_preference is not None:
         user.user_unit_preference = profile.user_unit_preference
     if profile.user_height is not None:

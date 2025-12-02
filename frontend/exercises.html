@@ -3,34 +3,259 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FitJournal - [Page Name]</title>
+    <title>FitJournal - Exercises</title>
     <link rel="stylesheet" href="css/paper.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <!-- Navigation Header -->
     <header class="text-center">
-        <!-- Logo -->
         <div class="margin-top">
-            <img src="images/logo_only.png" alt="FitJournal Logo" class="no-border" style="max-width: 80px; display: block; margin: 0 auto;">
+            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 90px;">
         </div>
         
-        <!-- Navigation Buttons -->
         <nav class="margin-top">
             <button onclick="window.location.href='dashboard.html'">Dashboard</button>
             <button onclick="window.location.href='profile.html'">Profile</button>
             <button onclick="window.location.href='exercises.html'" class="active">Exercises</button>
             <button onclick="window.location.href='routine.html'">Routine</button>
-            <button onclick="window.location.href='getwod.html'">Get WOD</button>
+            <button onclick="window.location.href='getwod.html'">getWOD</button>
         </nav>
     </header>
 
-    <!-- Page Content Goes Below -->
-    <main class="container margin-top">
-        <!-- YOUR PAGE-SPECIFIC CONTENT HERE -->
+    <!-- Exercises Content -->
+    <main class="container-fluid margin-top">
+        <h2 class="text-center">Your Exercises</h2>
         
+        <div class="row">
+            <!-- Left Side: Muscle Group Tabs (Vertical) -->
+            <div class="col-3">
+                <div class="tabs" style="display: flex; flex-direction: column;">
+                    <input id="tab-legs" type="radio" name="muscle-group" value="Legs" checked>
+                    <label for="tab-legs" class="muscle-tab">Legs</label>
+                    
+                    <input id="tab-shoulders" type="radio" name="muscle-group" value="Shoulders">
+                    <label for="tab-shoulders" class="muscle-tab">Shoulders</label>
+                    
+                    <input id="tab-chest" type="radio" name="muscle-group" value="Chest">
+                    <label for="tab-chest" class="muscle-tab">Chest</label>
+                    
+                    <input id="tab-glutes" type="radio" name="muscle-group" value="Glutes">
+                    <label for="tab-glutes" class="muscle-tab">Glutes</label>
+                    
+                    <input id="tab-biceps" type="radio" name="muscle-group" value="Biceps">
+                    <label for="tab-biceps" class="muscle-tab">Biceps</label>
+                    
+                    <input id="tab-triceps" type="radio" name="muscle-group" value="Triceps">
+                    <label for="tab-triceps" class="muscle-tab">Triceps</label>
+                    
+                    <input id="tab-back" type="radio" name="muscle-group" value="Back">
+                    <label for="tab-back" class="muscle-tab">Back</label>
+                    
+                    <input id="tab-calves" type="radio" name="muscle-group" value="Calves">
+                    <label for="tab-calves" class="muscle-tab">Calves</label>
+                    
+                    <input id="tab-abs" type="radio" name="muscle-group" value="Abs">
+                    <label for="tab-abs" class="muscle-tab">Abs</label>
+                </div>
+            </div>
+            
+            <!-- Right Side: Exercise List -->
+            <div class="col-9">
+                <div id="exercise-list">
+                    <h3 id="muscle-group-title">Legs Exercises</h3>
+                    
+                    <!-- Exercise Table -->
+                    <table class="table-hover">
+                        <thead>
+                            <tr>
+                                <th>Exercise Name</th>
+                                <th id="weight-header">Weight</th>
+                                <th>Link</th>
+                                <th>Include in Routine</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exercise-table-body">
+                            <!-- Exercises will be loaded here dynamically -->
+                        </tbody>
+                    </table>
+                    
+                    <div id="loading" style="text-align: center; padding: 2rem; display: none;">
+                        Loading exercises...
+                    </div>
+                    
+                    <div id="no-exercises" style="text-align: center; padding: 2rem; display: none;">
+                        No exercises found for this muscle group.
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="js/api.js"></script>
+    <script>
+        // Protect page
+        requireLogin();
+        
+         let allExercises = [];
+        let currentMuscleGroup = 'Legs';
+
+        // Set weight unit based on user preference
+        async function setWeightUnit() {
+            const profile = await getUserProfile();
+            const weightHeader = document.getElementById('weight-header');
+            
+            if (profile && profile.user_unit_preference === 'imperial') {
+                weightHeader.textContent = 'Weight (lbs)';
+            } else {
+                weightHeader.textContent = 'Weight (kg)';
+            }
+        }
+        
+        // Load exercises on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await setWeightUnit();
+            await loadExercises();
+            displayExercises(currentMuscleGroup);
+        });
+        
+        // Load all exercises from API
+        async function loadExercises() {
+            document.getElementById('loading').style.display = 'block';
+            allExercises = await getUserExercises();
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // Display exercises for selected muscle group
+        function displayExercises(muscleGroup) {
+            const tbody = document.getElementById('exercise-table-body');
+            const title = document.getElementById('muscle-group-title');
+            const noExercises = document.getElementById('no-exercises');
+            
+            // Update title
+            title.textContent = `${muscleGroup} Exercises`;
+            
+            // Filter exercises by muscle group
+            const filtered = allExercises.filter(ex => ex.exercise_muscle_group === muscleGroup);
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                noExercises.style.display = 'block';
+                return;
+            }
+            
+            noExercises.style.display = 'none';
+            
+            // Build table rows
+            tbody.innerHTML = filtered.map(exercise => `
+                <tr data-exercise-id="${exercise.exercise_id}">
+                    <td>${exercise.exercise_name}</td>
+                    <td>
+                        <input type="number" 
+                               class="weight-input" 
+                               value="${exercise.exercise_user_current_weight || ''}" 
+                               placeholder="0.00"
+                               step="0.5"
+                               min="0"
+                               data-exercise-id="${exercise.exercise_id}"
+                               style="width: 100px;">
+                    </td>
+                    <td>
+                        ${exercise.exercise_link ? 
+                            `<a href="${exercise.exercise_link}" target="_blank" style="color: #5595ce;">View</a>` : 
+                            '-'}
+                    </td>
+                    <td>
+                        <input type="checkbox" 
+                               class="include-checkbox"
+                               ${exercise.exercise_is_in_routine ? 'checked' : ''}
+                               data-exercise-id="${exercise.exercise_id}">
+                    </td>
+                </tr>
+            `).join('');
+            
+            // Add event listeners for weight inputs
+            document.querySelectorAll('.weight-input').forEach(input => {
+                input.addEventListener('blur', async (e) => {
+                    await updateExerciseWeight(e.target.dataset.exerciseId, parseFloat(e.target.value) || 0);
+                });
+            });
+            
+            // Add event listeners for include checkboxes
+            document.querySelectorAll('.include-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', async (e) => {
+                    await updateExerciseInclude(e.target.dataset.exerciseId, e.target.checked);
+                });
+            });
+        }
+        
+        // Update exercise weight
+        async function updateExerciseWeight(exerciseId, weight) {
+            const userId = getCurrentUserId();
+            
+            try {
+                const response = await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        exercise_user_current_weight: weight
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log('Weight updated successfully');
+                    // Update local data
+                    const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+                    if (exercise) {
+                        exercise.exercise_user_current_weight = weight;
+                    }
+                } else {
+                    console.error('Failed to update weight');
+                }
+            } catch (error) {
+                console.error('Error updating weight:', error);
+            }
+        }
+        
+        // Update exercise include status
+        async function updateExerciseInclude(exerciseId, isIncluded) {
+            const userId = getCurrentUserId();
+            
+            try {
+                const response = await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        exercise_is_in_routine: isIncluded
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log('Include status updated successfully');
+                    // Update local data
+                    const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+                    if (exercise) {
+                        exercise.exercise_is_in_routine = isIncluded;
+                    }
+                } else {
+                    console.error('Failed to update include status');
+                }
+            } catch (error) {
+                console.error('Error updating include status:', error);
+            }
+        }
+        
+        // Handle tab changes
+        document.querySelectorAll('input[name="muscle-group"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentMuscleGroup = e.target.value;
+                displayExercises(currentMuscleGroup);
+            });
+        });
+    </script>
 </body>
 </html>

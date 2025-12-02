@@ -97,7 +97,7 @@ h2.text-center {
 
 /* Selected state for sex and unit buttons */
 .sex-btn.selected, .unit-btn.selected {
-    background-color: #5595ce !important;  /* Blue when selected */
+    background-color: #2a2a2a !important;  /* Blue when selected */
     color: white !important;
 }
 
@@ -119,10 +119,53 @@ h2.text-center {
 #profile-form .btn-block {
     width: auto;
     padding: 0.5rem 3rem;
+    display: block;        /* Make it a block element */
+    margin: 0 auto;        /* Center it */
+    margin-bottom: 3rem;   /* Add space below */
 }
 
 /* Profile page - readonly email field */
 #email[readonly] {
     color: #cccccc !important;  /* Light gray text */
     cursor: not-allowed;
+}
+
+/* ========================================
+   EXERCISES PAGE
+   ======================================== */
+
+/* Exercises page */
+.muscle-tab {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background-color: #171717 !important;
+    border: 1px solid #444;
+    text-align: left;
+    transition: background-color 0.3s;
+}
+
+.muscle-tab:hover {
+    background-color: #2a2a2a !important;
+}
+
+input[name="muscle-group"]:checked + .muscle-tab {
+    background-color: #5595ce !important;
+    border-color: #5595ce;
+}
+
+#exercise-list {
+    padding-left: 2rem;
+}
+   
+.weight-input {
+    padding: 0.25rem 0.5rem;
+    background-color: #171717;  
+    border: 1px solid #171717;  
+    color: white;
+}
+
+.weight-input:focus {
+    outline: none;
+    border-color: #5595ce;  
 }
