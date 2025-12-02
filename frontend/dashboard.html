@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitJournal - Dashboard</title>
+    <link rel="stylesheet" href="css/paper.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navigation Header -->
+    <header class="text-center">
+        <div class="margin-top">
+            <img src="images/logo_only.png" alt="FitJournal Logo" class="no-border" style="max-width: 80px; display: block; margin: 0 auto;">
+        </div>
+        
+        <nav class="margin-top">
+            <button onclick="window.location.href='dashboard.html'" class="active">Dashboard</button>
+            <button onclick="window.location.href='profile.html'">Profile</button>
+            <button onclick="window.location.href='exercises.html'">Exercises</button>
+            <button onclick="window.location.href='routine.html'">Routine</button>
+            <button onclick="window.location.href='getwod.html'">Get WOD</button>
+        </nav>
+    </header>
+
+    <!-- Dashboard Content -->
+    <main class="container margin-top">
+        <h2>Welcome to Your Dashboard</h2>
+        
+        <div class="row">
+            <div class="col-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title">Recent Activity</h4>
+                        <p class="card-text">Your workout stats will appear here</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="card-title">Quick Stats</h4>
+                        <p class="card-text">Workouts completed this week: 0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        // Protect page - redirect to login if not authenticated
+        requireLogin();
+    </script>
+</body>
+</html>

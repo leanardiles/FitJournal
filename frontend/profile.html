@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitJournal - Profile</title>
+    <link rel="stylesheet" href="css/paper.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navigation Header -->
+    <header class="text-center">
+        <div class="margin-top">
+            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 80px;">
+        </div>
+        
+        <nav class="margin-top">
+            <button onclick="window.location.href='dashboard.html'">Dashboard</button>
+            <button onclick="window.location.href='profile.html'" class="active">Profile</button>
+            <button onclick="window.location.href='exercises.html'">Exercises</button>
+            <button onclick="window.location.href='routine.html'">Routine</button>
+            <button onclick="window.location.href='getwod.html'">Get WOD</button>
+        </nav>
+    </header>
+
+    <!-- Profile Content -->
+    <main class="container margin-top">
+        <h2 class="text-center">Your Profile</h2>
+        
+        <form id="profile-form">
+            <!-- Email (read-only) -->
+            <div class="form-group">
+                <label for="email">User (Email)</label>
+                <input type="email" id="email" class="input-block" readonly style="background-color: #2a2a2a; cursor: not-allowed;">
+            </div>
+            
+            <!-- Name -->
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" class="input-block" placeholder="Your name">
+            </div>
+            
+            <!-- Sex -->
+            <div class="form-group">
+                <label>Sex</label>
+                <div id="sex-buttons" style="display: flex; gap: 1rem;">
+                    <button type="button" class="sex-btn" data-value="M">M</button>
+                    <button type="button" class="sex-btn" data-value="F">W</button>
+                    <button type="button" class="sex-btn" data-value="NB">NB</button>
+                </div>
+                <input type="hidden" id="sex" name="sex">
+            </div>
+            
+            <!-- Preferred Unit -->
+            <div class="form-group">
+                <label>Preferred Unit</label>
+                <div id="unit-buttons" style="display: flex; gap: 1rem;">
+                    <button type="button" class="unit-btn" data-value="metric">Metric</button>
+                    <button type="button" class="unit-btn" data-value="imperial">Imperial</button>
+                </div>
+                <input type="hidden" id="unit" name="unit">
+            </div>
+            
+            <!-- Height -->
+            <div class="form-group">
+                <label for="height">Height (cm or inches)</label>
+                <input type="number" id="height" class="input-block" placeholder="170" step="0.01" min="0">
+            </div>
+            
+            <!-- Weight -->
+            <div class="form-group">
+                <label for="weight">Weight (kg or lbs)</label>
+                <input type="number" id="weight" class="input-block" placeholder="70.50" step="0.01" min="0">
+            </div>
+            
+            <!-- Save Button -->
+            <button type="submit" class="btn-primary btn-block">SAVE</button>
+        </form>
+        
+        <div id="message" style="margin-top: 1rem; display: none;"></div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        // Protect page
+        requireLogin();
+        
+        let selectedSex = null;
+        let selectedUnit = 'metric';
+        
+        // Load profile data on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            const profile = await getUserProfile();
+            
+            if (profile) {
+                // Populate form
+                document.getElementById('email').value = profile.user_email;
+                document.getElementById('name').value = profile.user_first_name || '';
+                document.getElementById('height').value = profile.user_height || '';
+                document.getElementById('weight').value = profile.user_weight || '';
+                
+                // Set sex
+                if (profile.user_sex) {
+                    selectedSex = profile.user_sex;
+                    document.getElementById('sex').value = selectedSex;
+                    highlightSexButton(selectedSex);
+                }
+                
+                // Set unit
+                if (profile.user_unit_preference) {
+                    selectedUnit = profile.user_unit_preference;
+                    document.getElementById('unit').value = selectedUnit;
+                    highlightUnitButton(selectedUnit);
+                }
+            }
+        });
+        
+        // Sex button handlers
+        document.querySelectorAll('.sex-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                selectedSex = e.target.dataset.value;
+                document.getElementById('sex').value = selectedSex;
+                highlightSexButton(selectedSex);
+            });
+        });
+        
+        function highlightSexButton(value) {
+            document.querySelectorAll('.sex-btn').forEach(btn => {
+                if (btn.dataset.value === value) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+        
+        // Unit button handlers
+        document.querySelectorAll('.unit-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                selectedUnit = e.target.dataset.value;
+                document.getElementById('unit').value = selectedUnit;
+                highlightUnitButton(selectedUnit);
+            });
+        });
+        
+        function highlightUnitButton(value) {
+            document.querySelectorAll('.unit-btn').forEach(btn => {
+                if (btn.dataset.value === value) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+        
+        // Form submission
+        document.getElementById('profile-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Get form values
+            const name = document.getElementById('name').value.trim();
+            const sex = document.getElementById('sex').value;
+            const unit = document.getElementById('unit').value;
+            const height = parseFloat(document.getElementById('height').value) || null;
+            const weight = parseFloat(document.getElementById('weight').value) || null;
+            
+            // Prepare data
+            const profileData = {
+                user_first_name: name || null,
+                user_sex: sex || null,
+                user_unit_preference: unit || 'metric',
+                user_height: height,
+                user_weight: weight
+            };
+            
+            // Update profile
+            const result = await updateUserProfile(profileData);
+            
+            if (result) {
+                // Show success message
+                const message = document.getElementById('message');
+                message.textContent = 'Profile updated successfully!';
+                message.className = 'alert alert-success';
+                message.style.display = 'block';
+                
+                // Hide message after 3 seconds
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>

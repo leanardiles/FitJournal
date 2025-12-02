@@ -281,6 +281,70 @@ async function deleteExercise(exerciseId) {
 }
 
 // ========================================
+// PROFILE
+// ========================================
+
+// Get user profile
+async function getUserProfile() {
+    const userId = getCurrentUserId();
+    
+    if (!userId) {
+        alert('Please log in first');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/profile/${userId}`);
+        
+        if (response.ok) {
+            const profile = await response.json();
+            return profile;
+        } else {
+            console.error('Failed to fetch profile');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+    }
+}
+
+// Update user profile
+async function updateUserProfile(profileData) {
+    const userId = getCurrentUserId();
+    
+    if (!userId) {
+        alert('Please log in first');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/profile/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(profileData)
+        });
+        
+        if (response.ok) {
+            const updatedProfile = await response.json();
+            return updatedProfile;
+        } else {
+            const error = await response.json();
+            alert(`Error updating profile: ${error.detail}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        alert('Network error. Please try again.');
+        return null;
+    }
+}
+
+// ========================================
 // CONSOLE LOG (for debugging)
 // ========================================
 

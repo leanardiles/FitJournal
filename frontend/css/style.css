@@ -14,14 +14,115 @@ body {
     padding: 0 2rem;
 }
 
-/* Remove any borders/shadows from elements (if PaperCSS adds them) */
-div {
-    border: none !important;
-    box-shadow: none !important;
-}
-
 /* Ensure form inputs don't have PaperCSS borders */
 .form-group {
     background: transparent;
     border: none;
+}
+
+/* Navigation Header */
+header {
+    padding: 1rem 0;
+    /*border-bottom: 1px solid #333;*/
+    margin-bottom: 2rem;
+    background-color: #171717 !important;
+}
+
+/* Logo styling - remove border and center */
+header img {
+    display: block;
+    margin: 0 auto;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+/* Navigation buttons - spread evenly with space */
+nav {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    padding: 0 4rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: #171717 !important;
+}
+
+/* Make buttons match page background */
+nav button {
+    min-width: 120px;
+    cursor: pointer;
+    background-color: #171717 !important;
+    background-image: none !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+}
+
+/* Button hover effect */
+nav button:hover {
+    background-color: #2a2a2a !important;
+    background-image: none !important;
+}
+
+/* Active page button */
+nav button.active {
+    background-color: #2a2a2a !important;
+    background-image: none !important;
+}
+
+/* Reduce space between header and form (for login/registration pages) */
+h2.text-center {
+    margin-bottom: 0.5rem;
+}
+
+.row.flex-middle {
+    margin-top: 0.5rem;
+}
+
+/* Profile page button groups */
+.sex-btn, .unit-btn {
+    min-width: 80px;
+    background-color: #171717 !important;
+    background-image: none !important;
+    color: white !important;
+    cursor: pointer;
+    transition: background-color 0.3s ease;  /* Smooth transition */
+}
+
+.sex-btn:hover, .unit-btn:hover {
+    background-color: #2a2a2a !important;
+}
+
+/* Selected state for sex and unit buttons */
+.sex-btn.selected, .unit-btn.selected {
+    background-color: #5595ce !important;  /* Blue when selected */
+    color: white !important;
+}
+
+/* Success message */
+.alert-success {
+    background-color: #4caf50;
+    color: white;
+    padding: 1rem;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* Profile page form styling - centered */
+#profile-form {
+    max-width: 50%;
+    margin: 0 auto;  /* Center the form */
+}
+
+#profile-form .btn-block {
+    width: auto;
+    padding: 0.5rem 3rem;
+}
+
+/* Profile page - readonly email field */
+#email[readonly] {
+    color: #cccccc !important;  /* Light gray text */
+    cursor: not-allowed;
 }
