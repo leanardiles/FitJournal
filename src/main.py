@@ -113,6 +113,48 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "user_email": db_user.user_email
     }
 
+
+# ========== PROFILE ROUTES ==========
+
+@app.get("/profile/{user_id}", response_model=schemas.UserProfileResponse)
+def get_profile(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get user profile information
+    """
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
+
+@app.put("/profile/{user_id}", response_model=schemas.UserProfileResponse)
+def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session = Depends(get_db)):
+    """
+    Update user profile information
+    """
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update fields
+    if profile.user_first_name is not None:
+        user.user_first_name = profile.user_first_name
+    if profile.user_sex is not None:
+        user.user_sex = profile.user_sex
+    if profile.user_unit_preference is not None:
+        user.user_unit_preference = profile.user_unit_preference
+    if profile.user_height is not None:
+        user.user_height = profile.user_height
+    if profile.user_weight is not None:
+        user.user_weight = profile.user_weight
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user
+
 # ========== EXERCISE ROUTES ==========
 
 @app.get("/exercises", response_model=List[schemas.ExerciseResponse])

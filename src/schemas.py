@@ -22,6 +22,27 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+# ========== PROFILE SCHEMAS ==========
+
+class UserProfileResponse(BaseModel):
+    user_id: int
+    user_email: EmailStr
+    user_first_name: Optional[str] = None
+    user_sex: Optional[str] = None
+    user_unit_preference: Optional[str] = "metric"
+    user_height: Optional[float] = None
+    user_weight: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+class UserProfileUpdate(BaseModel):
+    user_first_name: Optional[str] = None
+    user_sex: Optional[str] = None  # 'M', 'F', 'NB'
+    user_unit_preference: Optional[str] = None  # 'metric', 'imperial'
+    user_height: Optional[float] = None
+    user_weight: Optional[float] = None
+
 # ========== EXERCISE SCHEMAS ==========
 
 class ExerciseBase(BaseModel):
