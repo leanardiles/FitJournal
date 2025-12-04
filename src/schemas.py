@@ -66,3 +66,27 @@ class ExerciseResponse(ExerciseBase):
 
     class Config:
         from_attributes = True
+
+
+# ========== ROUTINE SCHEMAS ==========
+
+class RoutineDayCreate(BaseModel):
+    day_number: int  # 1-7
+    muscle_groups: list[str]  # List of muscle groups for this day
+
+class RoutineDayResponse(BaseModel):
+    routine_day_id: int
+    user_id: int
+    day_number: int
+    muscle_group: str
+    
+    class Config:
+        from_attributes = True
+
+class RoutineSetup(BaseModel):
+    days_per_week: int  # 1-7
+    routine_days: list[RoutineDayCreate]  # Each day with its muscle groups
+
+class RoutineResponse(BaseModel):
+    days_per_week: int
+    routine_days: dict[int, list[str]]  # day_number -> list of muscle groups

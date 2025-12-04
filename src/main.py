@@ -240,6 +240,94 @@ def get_routines(user_id: int, db: Session = Depends(get_db)):
     return routines
 
 
+# ========== ROUTINE ROUTES ==========
+
+@app.get("/routine/{user_id}")
+def get_routine(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get user's routine configuration
+    Returns days_per_week and muscle groups per day
+    """
+    # Get routine info
+    routine = db.query(models.Routine).filter(models.Routine.user_id == user_id).first()
+    
+    if not routine:
+        return {
+            "days_per_week": 0,
+            "routine_days": {}
+        }
+    
+    # Get all routine muscles per day
+    routine_muscles = db.query(models.RoutineMusclePerDay).filter(
+        models.RoutineMusclePerDay.user_id == user_id
+    ).order_by(models.RoutineMusclePerDay.day_number).all()
+    
+    # Organize by day
+    days_dict = {}
+    for rm in routine_muscles:
+        if rm.day_number not in days_dict:
+            days_dict[rm.day_number] = []
+        days_dict[rm.day_number].append(rm.muscle_group)
+    
+    return {
+        "days_per_week": routine.days_per_week,
+        "routine_days": days_dict
+    }
+
+@app.post("/routine/{user_id}")
+def create_or_update_routine(user_id: int, routine_data: schemas.RoutineSetup, db: Session = Depends(get_db)):
+    """
+    Create or update user's routine
+    Allows multiple muscle groups per day
+    """
+    # Validate user exists
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Validate days_per_week
+    if routine_data.days_per_week < 1 or routine_data.days_per_week > 7:
+        raise HTTPException(status_code=400, detail="days_per_week must be between 1 and 7")
+    
+    # Delete existing routine and routine_muscles_per_day (clean slate)
+    db.query(models.RoutineMusclePerDay).filter(models.RoutineMusclePerDay.user_id == user_id).delete()
+    db.query(models.Routine).filter(models.Routine.user_id == user_id).delete()
+    
+    # Create new routine
+    new_routine = models.Routine(
+        user_id=user_id,
+        days_per_week=routine_data.days_per_week
+    )
+    db.add(new_routine)
+    
+    # Create routine_muscles_per_day entries
+    for day_data in routine_data.routine_days:
+        # Validate day_number
+        if day_data.day_number < 1 or day_data.day_number > routine_data.days_per_week:
+            continue  # Skip invalid days
+        
+        for muscle_group in day_data.muscle_groups:
+            routine_muscle = models.RoutineMusclePerDay(
+                user_id=user_id,
+                day_number=day_data.day_number,
+                muscle_group=muscle_group
+            )
+            db.add(routine_muscle)
+    
+    db.commit()
+    
+    return {"message": "Routine saved successfully"}
+
+@app.delete("/routine/{user_id}")
+def delete_routine(user_id: int, db: Session = Depends(get_db)):
+    """
+    Delete user's routine
+    """
+    db.query(models.RoutineMusclePerDay).filter(models.RoutineMusclePerDay.user_id == user_id).delete()
+    db.query(models.Routine).filter(models.Routine.user_id == user_id).delete()
+    db.commit()
+    
+    return {"message": "Routine deleted successfully"}
 
 
 

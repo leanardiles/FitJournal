@@ -344,6 +344,99 @@ async function updateUserProfile(profileData) {
     }
 }
 
+
+// ========================================
+// ROUTINE
+// ========================================
+
+// Get user routine
+async function getUserRoutine() {
+    const userId = getCurrentUserId();
+    
+    if (!userId) {
+        alert('Please log in first');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/routine/${userId}`);
+        
+        if (response.ok) {
+            const routine = await response.json();
+            return routine;
+        } else {
+            console.error('Failed to fetch routine');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error fetching routine:', error);
+        return null;
+    }
+}
+
+// Save user routine
+async function saveUserRoutine(routineData) {
+    const userId = getCurrentUserId();
+    
+    if (!userId) {
+        alert('Please log in first');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/routine/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(routineData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            return result;
+        } else {
+            const error = await response.json();
+            alert(`Error saving routine: ${error.detail}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('Error saving routine:', error);
+        alert('Network error. Please try again.');
+        return null;
+    }
+}
+
+// Delete user routine
+async function deleteUserRoutine() {
+    const userId = getCurrentUserId();
+    
+    if (!userId) {
+        alert('Please log in first');
+        window.location.href = 'login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/routine/${userId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            return true;
+        } else {
+            console.error('Failed to delete routine');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error deleting routine:', error);
+        return false;
+    }
+}
+
+
 // ========================================
 // CONSOLE LOG (for debugging)
 // ========================================
