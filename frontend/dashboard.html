@@ -11,7 +11,7 @@
     <!-- Navigation Header -->
     <header class="text-center">
         <div class="margin-top">
-            <img src="images/logo_only.png" alt="FitJournal Logo" class="no-border" style="max-width: 90px; display: block; margin: 0 auto;">
+            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 90px;">
         </div>
         
         <nav class="margin-top">
@@ -25,18 +25,22 @@
 
     <!-- Dashboard Content -->
     <main class="container margin-top">
-        <h3>Welcome to Your Dashboard</h3>
+        <h3 class="text-center">The Dashboard of a CHAMPION 💪</h3>
         
         <div class="row">
+            <!-- Left: Routine Display -->
             <div class="col-6">
                 <div class="card">
                     <div class="card-body">
-                        <h4 class="card-title">Recent Activity</h4>
-                        <p class="card-text">Your workout stats will appear here</p>
+                        <h4 class="card-title">Your Current Routine</h4>
+                        <div id="routine-container">
+                            <p style="color: #888;">Loading...</p>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Right: Quick Stats -->
             <div class="col-6">
                 <div class="card">
                     <div class="card-body">
@@ -52,6 +56,53 @@
     <script>
         // Protect page - redirect to login if not authenticated
         requireLogin();
+        
+        // Load routine on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadRoutineOnDashboard();
+        });
+        
+        // Load and display routine
+        async function loadRoutineOnDashboard() {
+            const routineContainer = document.getElementById('routine-container');
+            const routine = await getUserRoutine();
+            
+            // Check if user has a routine
+            if (!routine || routine.days_per_week === 0) {
+                // No routine - show empty state
+                routineContainer.innerHTML = `
+                    <p style="color: #888; font-style: italic;">
+                        No routine set up yet.
+                    </p>
+                    <button onclick="window.location.href='routine.html'" style="margin-top: 1rem;">
+                        Create Routine
+                    </button>
+                `;
+                return;
+            }
+            
+            // User has a routine - display it
+            let html = `<p><strong>Training ${routine.days_per_week} ${routine.days_per_week === 1 ? 'day' : 'days'} per week</strong></p>`;
+            html += '<div style="margin-top: 1rem;">';
+            
+            for (let day = 1; day <= routine.days_per_week; day++) {
+                const muscles = routine.routine_days[day] || [];
+                html += `
+                    <div class="routine-day-display" style="padding: 0.5rem; margin-bottom: 0.5rem; background-color: #2a2a2a; border-left: 3px solid #5595ce;">
+                        <strong>Day ${day}:</strong> ${muscles.length > 0 ? muscles.join(', ') : 'Rest day'}
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            html += `
+                <button onclick="window.location.href='routine.html'" style="margin-top: 1rem;">
+                    Edit Routine
+                </button>
+            `;
+            
+            routineContainer.innerHTML = html;
+        }
     </script>
 </body>
 </html>
