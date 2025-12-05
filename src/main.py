@@ -6,16 +6,8 @@ import models
 import schemas
 from database import engine, get_db
 from passlib.context import CryptContext
+from datetime import date
 
-
-# #Legacy modules: DELETE?
-# import random
-# import sys
-# import os #to interact with the operating system. In this case, it's used to access environment variables
-# import getpass
-# import json
-# from datetime import datetime
-# from collections import deque
 
 
 # Create database tables (if they don't exist)
@@ -157,6 +149,7 @@ def update_profile(user_id: int, profile: schemas.UserProfileUpdate, db: Session
     
     return user
 
+
 # ========== EXERCISE ROUTES ==========
 
 @app.get("/exercises", response_model=List[schemas.ExerciseResponse])
@@ -219,6 +212,7 @@ def delete_exercise(exercise_id: int, user_id: int, db: Session = Depends(get_db
     db.commit()
     return None
 
+
 # ========== DEFAULT EXERCISES ROUTES ==========
 
 @app.get("/default-exercises")
@@ -228,6 +222,7 @@ def get_default_exercises(db: Session = Depends(get_db)):
     """
     exercises = db.query(models.DefaultExercise).all()
     return exercises
+
 
 # ========== ROUTINE ROUTES (PLACEHOLDER) ==========
 
@@ -330,12 +325,223 @@ def delete_routine(user_id: int, db: Session = Depends(get_db)):
     return {"message": "Routine deleted successfully"}
 
 
+# ========== WORKOUT ROUTES ==========
+
+@app.get("/workout/state/{user_id}", response_model=schemas.WorkoutStateResponse)
+def get_workout_state(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get user's current workout state (which day they're on)
+    """
+    state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
+    
+    if not state:
+        # Create initial state for user
+        state = models.WorkoutState(
+            user_id=user_id,
+            current_day_number=1
+        )
+        db.add(state)
+        db.commit()
+        db.refresh(state)
+    
+    return state
+
+@app.post("/workout/complete/{user_id}")
+def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest, db: Session = Depends(get_db)):
+    """
+    Mark workout as complete
+    - Saves to workout_logs
+    - Increments exercise_times_performed
+    - Updates workout_state to next day
+    """
+    # Validate user exists
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get user's routine to know max days
+    routine = db.query(models.Routine).filter(models.Routine.user_id == user_id).first()
+    if not routine:
+        raise HTTPException(status_code=400, detail="No routine set up")
+    
+    # Save each exercise to workout_logs
+    for exercise_data in workout_data.exercises:
+        log = models.WorkoutLog(
+            user_id=user_id,
+            routine_day_number=workout_data.day_number,
+            exercise_id=exercise_data.exercise_id,
+            sets_completed=exercise_data.sets_completed,
+            reps_completed=exercise_data.reps_completed,
+            weight_used=exercise_data.weight_used,
+            workout_date=date.today()
+        )
+        db.add(log)
+        
+        # Increment exercise_times_performed
+        exercise = db.query(models.Exercise).filter(
+            models.Exercise.exercise_id == exercise_data.exercise_id
+        ).first()
+        if exercise:
+            exercise.exercise_times_performed += 1
+    
+    # Update workout_state to next day
+    state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
+    if not state:
+        state = models.WorkoutState(user_id=user_id, current_day_number=1)
+        db.add(state)
+    
+    # Cycle to next day (or back to 1)
+    next_day = (workout_data.day_number % routine.days_per_week) + 1
+    state.current_day_number = next_day
+    state.last_workout_date = date.today()
+    
+    db.commit()
+    
+    return {"message": "Workout completed successfully", "next_day": next_day}
+
+@app.get("/workout/logs/{user_id}")
+def get_workout_logs(user_id: int, limit: int = 30, db: Session = Depends(get_db)):
+    """
+    Get user's workout history (last 30 days by default)
+    """
+    logs = db.query(models.WorkoutLog).filter(
+        models.WorkoutLog.user_id == user_id
+    ).order_by(models.WorkoutLog.workout_date.desc()).limit(limit).all()
+    
+    return logs
 
 
+# ========== NEXT WORKOUT SELECTION ROUTES ==========
 
+@app.get("/next-workout/selections/{user_id}")
+def get_next_workout_selections(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get user's manually selected exercises for next workout
+    """
+    selections = db.query(models.NextWorkoutSelection).filter(
+        models.NextWorkoutSelection.user_id == user_id
+    ).all()
+    
+    return selections
 
+@app.post("/next-workout/toggle")
+def toggle_next_workout_selection(data: dict, db: Session = Depends(get_db)):
+    """
+    Toggle exercise selection for next workout
+    """
+    user_id = data['user_id']
+    exercise_id = data['exercise_id']
+    is_selected = data['is_selected']
+    
+    # Check if selection exists
+    selection = db.query(models.NextWorkoutSelection).filter(
+        models.NextWorkoutSelection.user_id == user_id,
+        models.NextWorkoutSelection.exercise_id == exercise_id
+    ).first()
+    
+    if selection:
+        selection.is_selected = is_selected
+    else:
+        selection = models.NextWorkoutSelection(
+            user_id=user_id,
+            exercise_id=exercise_id,
+            is_selected=is_selected
+        )
+        db.add(selection)
+    
+    db.commit()
+    return {"message": "Selection updated"}
 
+@app.delete("/next-workout/clear/{user_id}")
+def clear_next_workout_selections(user_id: int, db: Session = Depends(get_db)):
+    """
+    Clear all next workout selections
+    """
+    db.query(models.NextWorkoutSelection).filter(
+        models.NextWorkoutSelection.user_id == user_id
+    ).delete()
+    db.commit()
+    
+    return {"message": "Selections cleared"}
 
+@app.post("/next-workout/generate/{user_id}")
+def generate_next_workout(user_id: int, db: Session = Depends(get_db)):
+    """
+    Auto-generate next workout using algorithm
+    Selects 4 exercises per muscle group (lowest exercise_times_performed)
+    """
+    # Get user's current routine day
+    state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
+    if not state:
+        raise HTTPException(status_code=400, detail="No workout state found")
+    
+    current_day = state.current_day_number
+    
+    # Get muscle groups for current day
+    muscle_groups_for_day = db.query(models.RoutineMusclePerDay.muscle_group).filter(
+        models.RoutineMusclePerDay.user_id == user_id,
+        models.RoutineMusclePerDay.day_number == current_day
+    ).distinct().all()
+    
+    muscle_groups = [mg[0] for mg in muscle_groups_for_day]
+    
+    if not muscle_groups:
+        raise HTTPException(status_code=400, detail="No muscle groups assigned to current day")
+    
+    # Clear existing selections
+    db.query(models.NextWorkoutSelection).filter(
+        models.NextWorkoutSelection.user_id == user_id
+    ).delete()
+    
+    # Select 4 exercises per muscle group
+    selected_count = 0
+    for muscle_group in muscle_groups:
+        exercises = db.query(models.Exercise).filter(
+            models.Exercise.user_id == user_id,
+            models.Exercise.exercise_muscle_group == muscle_group,
+            models.Exercise.exercise_is_in_routine == True
+        ).order_by(models.Exercise.exercise_times_performed.asc()).limit(4).all()
+        
+        for exercise in exercises:
+            selection = models.NextWorkoutSelection(
+                user_id=user_id,
+                exercise_id=exercise.exercise_id,
+                is_selected=True
+            )
+            db.add(selection)
+            selected_count += 1
+    
+    db.commit()
+    
+    return {"message": "Next workout generated", "exercises_selected": selected_count}
+
+# ========== WORKOUT SESSION ROUTES ==========
+
+@app.get("/workout/sessions/{user_id}")
+def get_workout_sessions(user_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Get user's last N workout sessions (most recent first)
+    """
+    sessions = db.query(models.WorkoutSession).filter(
+        models.WorkoutSession.user_id == user_id
+    ).order_by(models.WorkoutSession.session_order.desc()).limit(limit).all()
+    
+    # Reverse to show oldest to newest (for display left to right)
+    return list(reversed(sessions))
+
+@app.post("/workout/logs-by-sessions/{user_id}")
+def get_workout_logs_by_sessions(user_id: int, data: dict, db: Session = Depends(get_db)):
+    """
+    Get workout logs for specific session IDs
+    """
+    session_ids = data.get('session_ids', [])
+    
+    logs = db.query(models.WorkoutLog).filter(
+        models.WorkoutLog.user_id == user_id,
+        models.WorkoutLog.session_id.in_(session_ids)
+    ).all()
+    
+    return logs
 
 
 

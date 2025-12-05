@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FitJournal - Dashboard</title>
+    <title>FitJournal - Calendar</title>
     <link rel="stylesheet" href="css/paper.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -11,11 +11,11 @@
     <!-- Navigation Header -->
     <header class="text-center">
         <div class="margin-top">
-            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 90px;">
+            <img src="images/logo_only.png" alt="FitJournal Logo" style="max-width: 80px;">
         </div>
         
         <nav class="margin-top">
-            <button onclick="window.location.href='dashboard.html'" >Dashboard</button>
+            <button onclick="window.location.href='dashboard.html'">Dashboard</button>
             <button onclick="window.location.href='profile.html'">Profile</button>
             <button onclick="window.location.href='exercises.html'">Exercises</button>
             <button onclick="window.location.href='routine.html'">Routine</button>
@@ -23,3 +23,276 @@
             <button onclick="window.location.href='getwod.html'">Get WOD</button>
         </nav>
     </header>
+
+    <!-- Calendar Content -->
+    <main class="container-fluid margin-top">
+        <h3 class="text-center">Your Workout Calendar</h3>
+        
+        <!-- Controls -->
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <button id="generate-next-workout-btn" class="btn-primary">🤖 Auto-Generate Next Workout</button>
+            <button id="clear-selections-btn" class="btn-secondary">Clear All Selections</button>
+        </div>
+        
+        <!-- Calendar Table -->
+        <div style="overflow-x: auto;">
+            <table id="calendar-table">
+                <thead>
+                    <tr id="header-row">
+                        <!-- Headers will be built by JavaScript -->
+                    </tr>
+                </thead>
+                <tbody id="calendar-body">
+                    <tr>
+                        <td colspan="13" style="text-align: center; padding: 2rem;">Loading calendar...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="message" style="margin-top: 1rem; display: none;"></div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        // Protect page
+        requireLogin();
+        
+        let allExercises = [];
+        let workoutSessions = [];
+        let workoutLogs = [];
+        let nextWorkoutSelections = {};
+        const columnsToShow = 10;
+        
+        // Load calendar on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCalendar();
+        });
+        
+        // Load all data and build calendar
+        async function loadCalendar() {
+            const userId = getCurrentUserId();
+            
+            // Load exercises (only those in routine)
+            allExercises = await getUserExercises();
+            allExercises = allExercises.filter(ex => ex.exercise_is_in_routine);
+            
+            // Load last 10 workout sessions
+            workoutSessions = await getWorkoutSessions(userId, 10);
+            
+            // Load workout logs for these sessions
+            if (workoutSessions.length > 0) {
+                const sessionIds = workoutSessions.map(s => s.session_id);
+                workoutLogs = await getWorkoutLogsBySessions(userId, sessionIds);
+            }
+            
+            // Load next workout selections
+            nextWorkoutSelections = await getNextWorkoutSelections(userId);
+            
+            // Build calendar table
+            buildCalendarTable();
+        }
+        
+        // Build the calendar table
+        function buildCalendarTable() {
+            const headerRow = document.getElementById('header-row');
+            const tbody = document.getElementById('calendar-body');
+            
+            // Clear and rebuild header
+            headerRow.innerHTML = '';
+            
+            // Column 1: Exercise Name (fixed, wide)
+            const nameHeader = document.createElement('th');
+            nameHeader.textContent = 'Exercise Name';
+            nameHeader.className = 'col-exercise-name';
+            headerRow.appendChild(nameHeader);
+            
+            // Column 2: Next Workout (fixed)
+            const nextWodHeader = document.createElement('th');
+            nextWodHeader.textContent = 'Next Workout';
+            nextWodHeader.className = 'col-next-workout';
+            headerRow.appendChild(nextWodHeader);
+            
+            // Columns 3-12: WOD 10 through WOD 1 (scrollable)
+            for (let i = columnsToShow; i >= 1; i--) {
+                const th = document.createElement('th');
+                th.className = 'col-wod';
+                
+                const sessionIndex = columnsToShow - i;
+                if (sessionIndex < workoutSessions.length) {
+                    const session = workoutSessions[sessionIndex];
+                    th.innerHTML = `
+                        <div>WOD ${i}</div>
+                        <div style="font-size: 0.75rem; font-weight: normal; color: #666;">${formatDateShort(new Date(session.workout_date))}</div>
+                    `;
+                } else {
+                    th.innerHTML = `
+                        <div>WOD ${i}</div>
+                        <div style="font-size: 0.75rem; font-weight: normal; color: #999;">-</div>
+                    `;
+                    th.style.color = '#999';
+                }
+                headerRow.appendChild(th);
+            }
+            
+            // Sort exercises by muscle group
+            allExercises.sort((a, b) => {
+                if (a.exercise_muscle_group !== b.exercise_muscle_group) {
+                    return a.exercise_muscle_group.localeCompare(b.exercise_muscle_group);
+                }
+                return a.exercise_name.localeCompare(b.exercise_name);
+            });
+            
+            tbody.innerHTML = '';
+            
+            // Build rows
+            let currentMuscle = null;
+            allExercises.forEach(exercise => {
+                // Add muscle group header if changed
+                if (exercise.exercise_muscle_group !== currentMuscle) {
+                    currentMuscle = exercise.exercise_muscle_group;
+                    const muscleHeaderRow = document.createElement('tr');
+                    muscleHeaderRow.className = 'muscle-header-row';
+                    const muscleCell = document.createElement('td');
+                    muscleCell.colSpan = 2 + columnsToShow; // Exercise Name + Next Workout + 10 WODs
+                    muscleCell.textContent = currentMuscle;
+                    muscleHeaderRow.appendChild(muscleCell);
+                    tbody.appendChild(muscleHeaderRow);
+                }
+                
+                const row = document.createElement('tr');
+                
+                // Column 1: Exercise Name
+                const nameCell = document.createElement('td');
+                nameCell.className = 'col-exercise-name';
+                nameCell.textContent = exercise.exercise_name;
+                row.appendChild(nameCell);
+                
+                // Column 2: Next Workout button
+                const nextWodCell = document.createElement('td');
+                nextWodCell.className = 'col-next-workout';
+                
+                const isSelected = nextWorkoutSelections[exercise.exercise_id] || false;
+                const selectBtn = document.createElement('button');
+                selectBtn.textContent = 'SELECT';
+                selectBtn.className = isSelected ? 'btn-next-selected' : 'btn-next-unselected';
+                selectBtn.addEventListener('click', async () => {
+                    await toggleNextWorkoutSelection(exercise.exercise_id, !isSelected);
+                    await loadCalendar();
+                });
+                nextWodCell.appendChild(selectBtn);
+                row.appendChild(nextWodCell);
+                
+                // Columns 3-12: WOD sessions
+                for (let i = 0; i < columnsToShow; i++) {
+                    const cell = document.createElement('td');
+                    cell.className = 'col-wod';
+                    
+                    if (i < workoutSessions.length) {
+                        const session = workoutSessions[i];
+                        const log = workoutLogs.find(log => 
+                            log.exercise_id === exercise.exercise_id && 
+                            log.session_id === session.session_id
+                        );
+                        
+                        if (log) {
+                            cell.textContent = `${log.sets_completed}×${log.reps_completed}`;
+                            cell.className = 'col-wod completed';
+                        } else {
+                            cell.textContent = '-';
+                            cell.className = 'col-wod empty';
+                        }
+                    } else {
+                        cell.textContent = '-';
+                        cell.className = 'col-wod empty';
+                    }
+                    
+                    row.appendChild(cell);
+                }
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Toggle next workout selection
+        async function toggleNextWorkoutSelection(exerciseId, isSelected) {
+            const userId = getCurrentUserId();
+            
+            try {
+                const response = await fetch(`${API_URL}/next-workout/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        exercise_id: exerciseId,
+                        is_selected: isSelected
+                    })
+                });
+                
+                if (response.ok) {
+                    nextWorkoutSelections[exerciseId] = isSelected;
+                }
+            } catch (error) {
+                console.error('Error updating selection:', error);
+            }
+        }
+        
+        // Auto-generate next workout
+        document.getElementById('generate-next-workout-btn').addEventListener('click', async () => {
+            const userId = getCurrentUserId();
+            
+            try {
+                const response = await fetch(`${API_URL}/next-workout/generate/${userId}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage('Next workout generated! ' + result.exercises_selected + ' exercises selected.', 'success');
+                    await loadCalendar();
+                } else {
+                    showMessage('Failed to generate workout', 'error');
+                }
+            } catch (error) {
+                console.error('Error generating workout:', error);
+            }
+        });
+        
+        // Clear all selections
+        document.getElementById('clear-selections-btn').addEventListener('click', async () => {
+            const userId = getCurrentUserId();
+            
+            try {
+                const response = await fetch(`${API_URL}/next-workout/clear/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showMessage('All selections cleared', 'success');
+                    await loadCalendar();
+                }
+            } catch (error) {
+                console.error('Error clearing selections:', error);
+            }
+        });
+        
+        // Helper: Format date
+        function formatDateShort(date) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months[date.getMonth()] + ' ' + date.getDate();
+        }
+        
+        // Helper: Show message
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = type === 'success' ? 'alert alert-success' : 'alert alert-danger';
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DECIMAL, Enum, Boolean, TIMESTAMP, ForeignKey, Text, CheckConstraint, text
+from sqlalchemy import Column, Integer, String, DECIMAL, Enum, Boolean, TIMESTAMP, ForeignKey, Text, CheckConstraint, text, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -45,11 +45,15 @@ class User(Base):
     user_is_active = Column(Boolean, default=True)
     user_created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
     user_updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    next_workout_selections = relationship("NextWorkoutSelection", cascade="all, delete-orphan")
 
-    # Relationships (only define once!)
+
+    # Relationships (ADD THE NEW ONES HERE)
     exercises = relationship("Exercise", back_populates="user", cascade="all, delete-orphan")
     routines = relationship("Routine", back_populates="user", cascade="all, delete-orphan")
     routine_muscles = relationship("RoutineMusclePerDay", back_populates="user", cascade="all, delete-orphan")
+    workout_state = relationship("WorkoutState", back_populates="user", uselist=False, cascade="all, delete-orphan")  # ADD THIS
+    workout_logs = relationship("WorkoutLog", back_populates="user", cascade="all, delete-orphan")  # ADD THIS
 
     # Table constraints
     __table_args__ = (
@@ -59,6 +63,7 @@ class User(Base):
     )
 
 
+
 class DefaultExercise(Base):
     __tablename__ = "default_exercises"
 
@@ -66,6 +71,7 @@ class DefaultExercise(Base):
     exercise_name = Column(String(50), nullable=False)
     exercise_muscle_group = Column(Enum(MuscleGroupEnum), nullable=False)
     exercise_link = Column(String(500), default=None)
+
 
 
 class Exercise(Base):
@@ -92,6 +98,7 @@ class Exercise(Base):
     )
 
 
+
 class Routine(Base):
     __tablename__ = "routine_days"
     
@@ -110,6 +117,7 @@ class Routine(Base):
     )
 
 
+
 class RoutineMusclePerDay(Base):
     __tablename__ = "routine_muscles_per_day"
     
@@ -122,3 +130,64 @@ class RoutineMusclePerDay(Base):
     
     # Relationship
     user = relationship("User", back_populates="routine_muscles")
+
+
+
+class WorkoutState(Base):
+    __tablename__ = "workout_state"
+    
+    state_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, unique=True)
+    current_day_number = Column(Integer, default=1)
+    last_workout_date = Column(Date, default=None)
+    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+    
+    # Relationship
+    user = relationship("User", back_populates="workout_state")
+
+
+
+class WorkoutLog(Base):
+    __tablename__ = "workout_logs"
+    
+    log_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    routine_day_number = Column(Integer, nullable=False)
+    exercise_id = Column(Integer, ForeignKey("exercises.exercise_id", ondelete="CASCADE"), nullable=False)
+    sets_completed = Column(Integer, default=0)
+    reps_completed = Column(Integer, default=0)
+    weight_used = Column(DECIMAL(5, 2), default=None)
+    workout_date = Column(Date, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    
+    # Relationships
+    user = relationship("User", back_populates="workout_logs")
+    exercise = relationship("Exercise")
+
+
+class NextWorkoutSelection(Base):
+    __tablename__ = "next_workout_selections"
+    
+    selection_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    exercise_id = Column(Integer, ForeignKey("exercises.exercise_id", ondelete="CASCADE"), nullable=False)
+    is_selected = Column(Boolean, default=False)
+    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+    
+    # Relationships
+    user = relationship("User")
+    exercise = relationship("Exercise")
+
+
+class WorkoutSession(Base):
+    __tablename__ = "workout_sessions"
+    
+    session_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    routine_day_number = Column(Integer, nullable=False)
+    workout_date = Column(Date, nullable=False)
+    session_order = Column(Integer, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    
+    # Relationship
+    user = relationship("User")

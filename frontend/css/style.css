@@ -260,3 +260,154 @@ input[name="muscle-group"]:checked + .muscle-tab {
     background-color: #2a2a2a;
     border-left: 3px solid #5595ce;
 }
+
+/* ========================================
+   CALENDAR PAGE
+   ======================================== */
+
+/* Calendar wrapper */
+main.container-fluid {
+    max-width: 98%;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Calendar table */
+#calendar-table {
+    border-collapse: collapse;
+    width: 100%;
+    background-color: #ffffff;
+    color: #000000;
+    font-size: 0.85rem;
+}
+
+/* All cells */
+#calendar-table th,
+#calendar-table td {
+    border: 1px solid #d0d0d0;
+    padding: 0.5rem;
+}
+
+/* Header cells */
+#calendar-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    color: #000000;
+    font-size: 0.9rem;
+}
+
+/* COLUMN 1: Exercise Name - FIXED, WIDE */
+#calendar-table .col-exercise-name {
+    position: sticky;
+    left: 0;
+    background-color: #ffffff;
+    z-index: 10;
+    min-width: 350px;
+    max-width: 350px;
+    width: 350px;
+    font-weight: 500;
+    text-align: left;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+#calendar-table th.col-exercise-name {
+    background-color: #f0f0f0;
+    z-index: 11;
+}
+
+/* COLUMN 2: Next Workout - FIXED */
+#calendar-table .col-next-workout {
+    position: sticky;
+    left: 350px;
+    background-color: #ffffff;
+    z-index: 10;
+    min-width: 120px;
+    max-width: 120px;
+    width: 120px;
+    text-align: center;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+#calendar-table th.col-next-workout {
+    background-color: #f0f0f0;
+    z-index: 11;
+}
+
+/* COLUMNS 3-12: WOD columns - SCROLLABLE */
+#calendar-table .col-wod {
+    min-width: 85px;
+    max-width: 85px;
+    width: 85px;
+    text-align: center;
+}
+
+/* Row hover effect */
+#calendar-table tbody tr:hover:not(.muscle-header-row) {
+    background-color: #f5f5f5;
+}
+
+#calendar-table tbody tr:hover:not(.muscle-header-row) .col-exercise-name,
+#calendar-table tbody tr:hover:not(.muscle-header-row) .col-next-workout {
+    background-color: #f5f5f5;
+}
+
+
+/* Muscle group header rows */
+#calendar-table tr.muscle-header-row td {
+    background-color: #e8e8e8 !important;
+    font-weight: bold;
+    color: #2c5282;
+    padding: 0.5rem;
+    font-size: 0.95rem;
+    text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 12;  /* Higher z-index than other sticky columns */
+    width: 470px;  /* Exercise Name (350px) + Next Workout (120px) */
+    }
+
+/* Completed workout cells */
+#calendar-table .completed {
+    background-color: #d4edda;
+    color: #155724;
+    font-weight: 500;
+}
+
+/* Empty cells */
+#calendar-table .empty {
+    background-color: #ffffff;
+    color: #999;
+}
+
+/* Next Workout Buttons */
+.btn-next-selected {
+    background-color: #666666 !important;  /* Dark grey when selected */
+    background-image: none !important;
+    color: white !important;
+    border: 1px solid #666666;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    width: 95px;
+}
+
+.btn-next-unselected {
+    background-color: #e8e8e8 !important;  /* Light grey when not selected */
+    background-image: none !important;
+    color: #666 !important;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    width: 95px;
+}
+
+.btn-next-unselected:hover {
+    background-color: #d0d0d0 !important;
+    border-color: #999;
+}
+
+.btn-next-selected:hover {
+    background-color: #555555 !important;  /* Darker on hover */
+}

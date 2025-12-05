@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
+from datetime import date
 
 # ========== USER SCHEMAS ==========
 
@@ -90,3 +91,38 @@ class RoutineSetup(BaseModel):
 class RoutineResponse(BaseModel):
     days_per_week: int
     routine_days: dict[int, list[str]]  # day_number -> list of muscle groups
+
+
+    # ========== WORKOUT SCHEMAS ==========
+
+class WorkoutStateResponse(BaseModel):
+    state_id: int
+    user_id: int
+    current_day_number: int
+    last_workout_date: Optional[date] = None
+    
+    class Config:
+        from_attributes = True
+
+class WorkoutLogCreate(BaseModel):
+    exercise_id: int
+    sets_completed: int
+    reps_completed: int
+    weight_used: Optional[float] = None
+
+class CompleteWorkoutRequest(BaseModel):
+    day_number: int
+    exercises: list[WorkoutLogCreate]
+
+class WorkoutLogResponse(BaseModel):
+    log_id: int
+    user_id: int
+    routine_day_number: int
+    exercise_id: int
+    sets_completed: int
+    reps_completed: int
+    weight_used: Optional[float]
+    workout_date: date
+    
+    class Config:
+        from_attributes = True

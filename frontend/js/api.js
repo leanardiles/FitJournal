@@ -438,6 +438,79 @@ async function deleteUserRoutine() {
 
 
 // ========================================
+// CALENDAR & NEXT WORKOUT
+// ========================================
+
+// Get workout logs
+async function getWorkoutLogs(userId, limit = 30) {
+    try {
+        const response = await fetch(`${API_URL}/workout/logs/${userId}?limit=${limit}`);
+        if (response.ok) {
+            return await response.json();
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching workout logs:', error);
+        return [];
+    }
+}
+
+// Get next workout selections
+async function getNextWorkoutSelections(userId) {
+    try {
+        const response = await fetch(`${API_URL}/next-workout/selections/${userId}`);
+        if (response.ok) {
+            const data = await response.json();
+            // Convert array to object for easier lookup
+            const selections = {};
+            data.forEach(item => {
+                selections[item.exercise_id] = item.is_selected;
+            });
+            return selections;
+        }
+        return {};
+    } catch (error) {
+        console.error('Error fetching next workout selections:', error);
+        return {};
+    }
+}
+
+// Get workout sessions (last N sessions)
+async function getWorkoutSessions(userId, limit = 10) {
+    try {
+        const response = await fetch(`${API_URL}/workout/sessions/${userId}?limit=${limit}`);
+        if (response.ok) {
+            return await response.json();
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching workout sessions:', error);
+        return [];
+    }
+}
+
+// Get workout logs by session IDs
+async function getWorkoutLogsBySessions(userId, sessionIds) {
+    try {
+        const response = await fetch(`${API_URL}/workout/logs-by-sessions/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ session_ids: sessionIds })
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching workout logs:', error);
+        return [];
+    }
+}
+
+
+// ========================================
 // CONSOLE LOG (for debugging)
 // ========================================
 
