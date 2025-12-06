@@ -131,8 +131,15 @@ if (loginForm) {
                 localStorage.setItem('user_id', data.user_id);
                 localStorage.setItem('user_email', data.user_email);
                 
-                alert('Login successful! Welcome to FitJournal!');
-                window.location.href = 'dashboard.html'; // Redirect to dashboard
+                // Fetch and store user's first name
+                fetch(`${API_URL}/profile/${data.user_id}`)
+                    .then(res => res.json())
+                    .then(profile => {
+                        if (profile.user_first_name) {
+                            localStorage.setItem('user_first_name', profile.user_first_name);
+                        }
+                        window.location.href = 'dashboard.html';
+                    });
             } else {
                 // Error from backend
                 alert(`Error: ${data.detail || 'Login failed. Please check your credentials.'}`);
@@ -172,11 +179,17 @@ function getCurrentUserEmail() {
     return localStorage.getItem('user_email');
 }
 
+// Get current user first name
+function getCurrentUserFirstName() {
+    return localStorage.getItem('user_first_name');
+}
+
 // Logout function
 function logout() {
     localStorage.removeItem('user_id');
     localStorage.removeItem('user_email');
-    window.location.href = 'index.html';
+    localStorage.removeItem('user_first_name');  // Add this line
+    window.location.href = 'login.html';
 }
 
 // Protect pages that require login
