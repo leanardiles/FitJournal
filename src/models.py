@@ -158,11 +158,13 @@ class WorkoutLog(Base):
     reps_completed = Column(Integer, default=0)
     weight_used = Column(DECIMAL(5, 2), default=None)
     workout_date = Column(Date, nullable=False)
+    session_id = Column(Integer, ForeignKey("workout_sessions.session_id", ondelete="CASCADE"), nullable=True)  # ADD THIS LINE
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     
     # Relationships
     user = relationship("User", back_populates="workout_logs")
     exercise = relationship("Exercise")
+    session = relationship("WorkoutSession")  # ADD THIS LINE
 
 
 class NextWorkoutSelection(Base):

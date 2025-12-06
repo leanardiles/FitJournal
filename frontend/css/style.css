@@ -88,7 +88,7 @@ h2.text-center {
     background-image: none !important;
     color: white !important;
     cursor: pointer;
-    transition: background-color 0.3s ease;  /* Smooth transition */
+    transition: background-color 0.3s ease;
 }
 
 .sex-btn:hover, .unit-btn:hover {
@@ -175,7 +175,7 @@ input[name="muscle-group"]:checked + .muscle-tab {
    ======================================== */
 
 .routine-step {
-    max-width: 800px;
+    max-width: 50%;
     margin: 0 auto;
 }
 
@@ -368,8 +368,8 @@ main.container-fluid {
 
 /* Completed workout cells */
 #calendar-table .completed {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: #ffffff;
+    color: #000000;
     font-weight: 500;
 }
 

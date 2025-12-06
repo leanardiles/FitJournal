@@ -350,10 +350,15 @@ def get_workout_state(user_id: int, db: Session = Depends(get_db)):
 def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest, db: Session = Depends(get_db)):
     """
     Mark workout as complete
-    - Saves to workout_logs
+    - Creates workout_session
+    - Saves to workout_logs (linked to session)
     - Increments exercise_times_performed
+    - Updates exercise weights
     - Updates workout_state to next day
+    - Deselects completed exercises from next workout
     """
+    from datetime import date
+    
     # Validate user exists
     user = db.query(models.User).filter(models.User.user_id == user_id).first()
     if not user:
@@ -364,8 +369,30 @@ def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest,
     if not routine:
         raise HTTPException(status_code=400, detail="No routine set up")
     
-    # Save each exercise to workout_logs
+    # Get the next session_order number
+    last_session = db.query(models.WorkoutSession).filter(
+        models.WorkoutSession.user_id == user_id
+    ).order_by(models.WorkoutSession.session_order.desc()).first()
+    
+    next_session_order = (last_session.session_order + 1) if last_session else 1
+    
+    # Create workout session
+    session = models.WorkoutSession(
+        user_id=user_id,
+        routine_day_number=workout_data.day_number,
+        workout_date=date.today(),
+        session_order=next_session_order
+    )
+    db.add(session)
+    db.flush()  # Get session_id before creating logs
+    
+    # Collect exercise IDs that were completed
+    completed_exercise_ids = []
+    
+    # Save each exercise to workout_logs (linked to session)
     for exercise_data in workout_data.exercises:
+        completed_exercise_ids.append(exercise_data.exercise_id)
+        
         log = models.WorkoutLog(
             user_id=user_id,
             routine_day_number=workout_data.day_number,
@@ -373,7 +400,8 @@ def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest,
             sets_completed=exercise_data.sets_completed,
             reps_completed=exercise_data.reps_completed,
             weight_used=exercise_data.weight_used,
-            workout_date=date.today()
+            workout_date=date.today(),
+            session_id=session.session_id
         )
         db.add(log)
         
@@ -383,6 +411,16 @@ def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest,
         ).first()
         if exercise:
             exercise.exercise_times_performed += 1
+            
+            # Update exercise weight if it was changed
+            if exercise_data.weight_used and exercise_data.weight_used > 0:
+                exercise.exercise_user_current_weight = exercise_data.weight_used
+    
+    # Deselect completed exercises from next workout
+    db.query(models.NextWorkoutSelection).filter(
+        models.NextWorkoutSelection.user_id == user_id,
+        models.NextWorkoutSelection.exercise_id.in_(completed_exercise_ids)
+    ).delete(synchronize_session=False)
     
     # Update workout_state to next day
     state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
@@ -397,7 +435,7 @@ def complete_workout(user_id: int, workout_data: schemas.CompleteWorkoutRequest,
     
     db.commit()
     
-    return {"message": "Workout completed successfully", "next_day": next_day}
+    return {"message": "Workout completed successfully", "next_day": next_day, "session_id": session.session_id}
 
 @app.get("/workout/logs/{user_id}")
 def get_workout_logs(user_id: int, limit: int = 30, db: Session = Depends(get_db)):
@@ -453,45 +491,82 @@ def toggle_next_workout_selection(data: dict, db: Session = Depends(get_db)):
     return {"message": "Selection updated"}
 
 @app.delete("/next-workout/clear/{user_id}")
-def clear_next_workout_selections(user_id: int, db: Session = Depends(get_db)):
+def clear_next_workout_selections(user_id: int, day_number: int = None, db: Session = Depends(get_db)):
     """
-    Clear all next workout selections
+    Clear next workout selections
+    If day_number is specified, only clear exercises for that day's muscle groups
     """
-    db.query(models.NextWorkoutSelection).filter(
-        models.NextWorkoutSelection.user_id == user_id
-    ).delete()
+    if day_number is None:
+        # Clear all selections
+        db.query(models.NextWorkoutSelection).filter(
+            models.NextWorkoutSelection.user_id == user_id
+        ).delete()
+    else:
+        # Get muscle groups for specified day
+        muscle_groups_for_day = db.query(models.RoutineMusclePerDay.muscle_group).filter(
+            models.RoutineMusclePerDay.user_id == user_id,
+            models.RoutineMusclePerDay.day_number == day_number
+        ).distinct().all()
+        
+        muscle_groups = [mg[0] for mg in muscle_groups_for_day]
+        
+        # Get exercises for these muscle groups
+        exercises_for_day = db.query(models.Exercise.exercise_id).filter(
+            models.Exercise.user_id == user_id,
+            models.Exercise.exercise_muscle_group.in_(muscle_groups),
+            models.Exercise.exercise_is_in_routine == True
+        ).all()
+        
+        exercise_ids = [ex[0] for ex in exercises_for_day]
+        
+        # Clear only these exercises
+        db.query(models.NextWorkoutSelection).filter(
+            models.NextWorkoutSelection.user_id == user_id,
+            models.NextWorkoutSelection.exercise_id.in_(exercise_ids)
+        ).delete(synchronize_session=False)
+    
     db.commit()
     
     return {"message": "Selections cleared"}
 
+
 @app.post("/next-workout/generate/{user_id}")
-def generate_next_workout(user_id: int, db: Session = Depends(get_db)):
+def generate_next_workout(user_id: int, day_number: int = None, db: Session = Depends(get_db)):
     """
     Auto-generate next workout using algorithm
     Selects 4 exercises per muscle group (lowest exercise_times_performed)
     """
-    # Get user's current routine day
-    state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
-    if not state:
-        raise HTTPException(status_code=400, detail="No workout state found")
+    # If no day_number specified, use user's current workout state
+    if day_number is None:
+        state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
+        if not state:
+            raise HTTPException(status_code=400, detail="No workout state found")
+        day_number = state.current_day_number
     
-    current_day = state.current_day_number
-    
-    # Get muscle groups for current day
+    # Get muscle groups for specified day
     muscle_groups_for_day = db.query(models.RoutineMusclePerDay.muscle_group).filter(
         models.RoutineMusclePerDay.user_id == user_id,
-        models.RoutineMusclePerDay.day_number == current_day
+        models.RoutineMusclePerDay.day_number == day_number
     ).distinct().all()
     
     muscle_groups = [mg[0] for mg in muscle_groups_for_day]
     
     if not muscle_groups:
-        raise HTTPException(status_code=400, detail="No muscle groups assigned to current day")
+        raise HTTPException(status_code=400, detail="No muscle groups assigned to this day")
     
-    # Clear existing selections
+    # Clear existing selections for this day's exercises only
+    exercises_for_day = db.query(models.Exercise.exercise_id).filter(
+        models.Exercise.user_id == user_id,
+        models.Exercise.exercise_muscle_group.in_(muscle_groups),
+        models.Exercise.exercise_is_in_routine == True
+    ).all()
+    
+    exercise_ids = [ex[0] for ex in exercises_for_day]
+    
     db.query(models.NextWorkoutSelection).filter(
-        models.NextWorkoutSelection.user_id == user_id
-    ).delete()
+        models.NextWorkoutSelection.user_id == user_id,
+        models.NextWorkoutSelection.exercise_id.in_(exercise_ids)
+    ).delete(synchronize_session=False)
     
     # Select 4 exercises per muscle group
     selected_count = 0
@@ -513,7 +588,7 @@ def generate_next_workout(user_id: int, db: Session = Depends(get_db)):
     
     db.commit()
     
-    return {"message": "Next workout generated", "exercises_selected": selected_count}
+    return {"message": "Next workout generated", "exercises_selected": selected_count, "day_number": day_number}
 
 # ========== WORKOUT SESSION ROUTES ==========
 
@@ -529,6 +604,7 @@ def get_workout_sessions(user_id: int, limit: int = 10, db: Session = Depends(ge
     # Reverse to show oldest to newest (for display left to right)
     return list(reversed(sessions))
 
+
 @app.post("/workout/logs-by-sessions/{user_id}")
 def get_workout_logs_by_sessions(user_id: int, data: dict, db: Session = Depends(get_db)):
     """
@@ -540,11 +616,16 @@ def get_workout_logs_by_sessions(user_id: int, data: dict, db: Session = Depends
         models.WorkoutLog.user_id == user_id,
         models.WorkoutLog.session_id.in_(session_ids)
     ).all()
-    
     return logs
 
 
+@app.get("/workout/state/{user_id}")
+def get_workout_state(user_id: int, db: Session = Depends(get_db)):
+    """Get user's current routine day"""
 
+@app.get("/next-workout/selections/{user_id}")
+def get_next_workout_selections(user_id: int, db: Session = Depends(get_db)):
+    """Get exercises selected for next workout"""
 
 
 
