@@ -4,17 +4,21 @@ A no-frills fitness tracker web application that feels like your paper notebook.
 
 ## Project Overview
 
-FitJournal is a fitness tracking application built as a final project for COM5222 Fundamentals of Software Engineering at Yeshiva University (Katz School).
+FitJournal is a comprehensive fitness tracking application built as a final project for COM5222 Fundamentals of Software Engineering at Yeshiva University (Katz School). The application provides a complete workout management system with routine planning, exercise tracking, and workout history visualization.
 
-## Features (Planned)
+## Features
 
 - ✅ User registration and authentication
+- ✅ User profile management (age, weight, height, unit preferences)
 - ✅ 101 default exercises (copied to each user on registration)
-- ✅ Exercise management (view, create, update, delete)
-- 🚧 Build workout routines
-- 🚧 Track daily workouts
-- 🚧 Balanced workout suggestions based on muscle groups
-- 🚧 Progress tracking and analytics
+- ✅ Exercise management with muscle group organization
+- ✅ Custom routine builder (1-7 days per week, multiple muscle groups per day)
+- ✅ Intelligent workout generation algorithm
+- ✅ Daily workout tracking (Get WOD - Workout of the Day)
+- ✅ Workout history calendar with multi-day filtering
+- ✅ Automatic exercise weight tracking and updates
+- ✅ Session-based workout logging
+- ✅ Progress tracking by exercise frequency
 
 ## Tech Stack
 
@@ -29,6 +33,7 @@ FitJournal is a fitness tracking application built as a final project for COM522
 - **CSS Framework:** PaperCSS (dark mode)
 - **JavaScript:** Vanilla JS (ES6+)
 - **HTTP Server:** Python http.server (development)
+- **UI Design:** Custom dark theme (#171717 background)
 
 ## Project Structure
 ```
@@ -44,11 +49,15 @@ FitJournal/
 │   ├── index.html           # Landing page
 │   ├── login.html           # Login page
 │   ├── registration.html    # Registration page
-│   ├── dashboard.html       # User dashboard (in progress)
-│   ├── exercises.html       # Exercise management (in progress)
+│   ├── dashboard.html       # User dashboard
+│   ├── profile.html         # User profile management
+│   ├── exercises.html       # Exercise management with muscle group tabs
+│   ├── routine.html         # Routine builder (days + muscle groups)
+│   ├── calendar.html        # Workout history calendar with filtering
+│   ├── getwod.html          # Workout of the Day generation & completion
 │   ├── css/
 │   │   ├── paper.css        # PaperCSS framework
-│   │   └── style.css        # Custom styles (dark theme)
+│   │   └── style.css        # Custom dark theme styles
 │   ├── js/
 │   │   └── api.js           # Frontend-backend API communication
 │   └── images/
@@ -134,10 +143,44 @@ cd frontend
 python -m http.server 8080
 ```
 
-3. Access pages at:
-   - Registration: `http://localhost:8080/registration.html`
-   - Login: `http://localhost:8080/login.html`
-   - Dashboard: `http://localhost:8080/dashboard.html`
+3. Access the application at: `http://localhost:8080/`
+
+## Core Workflows
+
+### 1. Registration & Profile Setup
+1. Register new account with email/password
+2. Set up profile (name, age, weight, height, unit preference)
+3. 101 default exercises automatically copied to user account
+
+### 2. Exercise Management
+1. View exercises organized by 9 muscle groups (tabs)
+2. Update current weight for each exercise
+3. Toggle exercises in/out of routine
+4. Track exercise performance count
+
+### 3. Routine Creation
+1. Select training days per week (1-7)
+2. Assign muscle groups to each day
+3. System stores routine structure for workout generation
+
+### 4. Workout Selection (Calendar)
+1. View calendar with multi-day filtering (Current Day, All Days, Day 1, Day 2, etc.)
+2. Manually select exercises or auto-generate based on algorithm
+3. Algorithm selects 4 exercises per muscle group (prioritizes least-performed)
+4. View workout history with sessions displayed by date
+
+### 5. Workout Execution (Get WOD)
+1. Generate Workout of the Day based on current routine day
+2. Pre-filled weights from exercise database
+3. Enter sets/reps for each exercise
+4. Mark as complete to log workout and advance to next day
+5. Completed exercises automatically deselected for next planning cycle
+
+### 6. Progress Tracking
+1. Calendar displays workout history (last 10 sessions)
+2. Track sets completed per exercise per session
+3. Exercise performance count auto-increments
+4. Weight progression tracked automatically
 
 ## API Endpoints
 
@@ -145,17 +188,39 @@ python -m http.server 8080
 - `POST /register` - Register new user (creates user + copies 101 default exercises)
 - `POST /login` - User login (returns user_id and email)
 
+### Profile
+- `GET /profile/{user_id}` - Get user profile
+- `PUT /profile/{user_id}` - Update user profile
+
 ### Exercises
 - `GET /exercises?user_id={id}` - Get all exercises for user
 - `POST /exercises?user_id={id}` - Create new exercise
 - `PUT /exercises/{exercise_id}?user_id={id}` - Update exercise
 - `DELETE /exercises/{exercise_id}?user_id={id}` - Delete exercise
+- `PATCH /exercises/{exercise_id}/weight` - Update exercise weight
+
+### Routines
+- `GET /routine/{user_id}` - Get user's routine
+- `POST /routine/{user_id}` - Create/update routine
+- `DELETE /routine/{user_id}` - Delete routine
+
+### Workout State
+- `GET /workout/state/{user_id}` - Get current workout state (which day user is on)
+
+### Workout Sessions & Logs
+- `POST /workout/complete/{user_id}` - Complete workout (creates session, logs exercises, advances day)
+- `GET /workout/sessions/{user_id}?limit={n}` - Get last N workout sessions
+- `POST /workout/logs-by-sessions/{user_id}` - Get logs for specific sessions
+- `GET /workout/logs/{user_id}?limit={n}` - Get workout logs
+
+### Next Workout Management
+- `GET /next-workout/selections/{user_id}` - Get selected exercises for next workout
+- `POST /next-workout/toggle` - Toggle exercise selection
+- `POST /next-workout/generate/{user_id}?day_number={n}` - Auto-generate workout for specific day
+- `DELETE /next-workout/clear/{user_id}?day_number={n}` - Clear selections for specific day
 
 ### Default Exercises
 - `GET /default-exercises` - Get all 101 default exercises (template catalog)
-
-### Routines (Placeholder)
-- `GET /routines?user_id={id}` - Get user's routines (to be implemented)
 
 ## Database Schema
 
@@ -194,10 +259,53 @@ python -m http.server 8080
 - `comments` - VARCHAR(300)
 - `exercise_created_at`, `exercise_updated_at` - Timestamps
 
-#### `routine` (Placeholder)
+#### `routine_days`
 - `routine_id` (PK)
 - `user_id` (FK → users.user_id)
 - `days_per_week` - Integer (1-7)
+- `created_at`, `updated_at` - Timestamps
+
+#### `routine_muscles_per_day`
+- `routine_day_id` (PK)
+- `user_id` (FK → users.user_id)
+- `day_number` - Integer (1-7)
+- `muscle_group` - ENUM (9 muscle groups)
+- `created_at`, `updated_at` - Timestamps
+
+#### `workout_state`
+- `state_id` (PK)
+- `user_id` (FK → users.user_id, UNIQUE)
+- `current_day_number` - Integer (tracks which routine day user is on)
+- `last_workout_date` - DATE
+- `updated_at` - Timestamp
+
+#### `workout_sessions`
+- `session_id` (PK)
+- `user_id` (FK → users.user_id)
+- `routine_day_number` - Integer
+- `workout_date` - DATE
+- `session_order` - Integer (1, 2, 3... incrementing order)
+- `created_at` - Timestamp
+
+#### `workout_logs`
+- `log_id` (PK)
+- `user_id` (FK → users.user_id)
+- `session_id` (FK → workout_sessions.session_id)
+- `routine_day_number` - Integer
+- `exercise_id` (FK → exercises.exercise_id)
+- `sets_completed` - Integer
+- `reps_completed` - Integer
+- `weight_used` - DECIMAL(5,2) (snapshot of weight at time of workout)
+- `workout_date` - DATE
+- `created_at` - Timestamp
+
+#### `next_workout_selections`
+- `selection_id` (PK)
+- `user_id` (FK → users.user_id)
+- `exercise_id` (FK → exercises.exercise_id)
+- `is_selected` - Boolean
+- `updated_at` - Timestamp
+- UNIQUE constraint on (user_id, exercise_id)
 
 ## Design Philosophy
 
@@ -219,43 +327,96 @@ FitJournal uses a **copy-on-registration** approach:
 - User can then modify weights, add comments, delete unwanted exercises
 - Each user's data is completely independent
 
+### Workout Algorithm
+
+The auto-generation algorithm ensures balanced muscle development:
+
+1. Gets muscle groups for current routine day
+2. Selects 4 exercises per muscle group
+3. Prioritizes exercises with lowest `exercise_times_performed` count
+4. Ensures variety and prevents overtraining specific exercises
+
+### Session-Based Logging
+
+Workouts are organized into sessions for clean history tracking:
+
+- Each completed workout creates a `workout_session` entry
+- All exercises in that workout link to the same `session_id`
+- Sessions have an incrementing `session_order` (1, 2, 3...)
+- Calendar displays last 10 sessions with exercise sets completed
+
+## UI/UX Features
+
+### Dark Theme
+- Custom dark mode (#171717 background)
+- High contrast for readability
+- PaperCSS framework with custom overrides
+
+### Calendar Filtering
+- **Current Day** - Shows only today's workout (default view)
+- **All Days** - Shows all exercises across routine
+- **Day 1, Day 2, etc.** - Multi-select specific days (e.g., Day 1 + Day 3)
+- Filtered views affect both exercise display and session history
+
+### Responsive Tables
+- Fixed columns for exercise names and actions
+- Scrollable columns for workout history
+- Sticky headers for easy navigation
+- White background for calendar (spreadsheet-style)
+
+### Smart Form Behavior
+- Auto-save on blur for weight inputs
+- Dynamic unit labels (kg/lbs) based on user preference
+- Form validation with helpful error messages
+- Pre-filled data from database
+
 ## Current Status
 
 ### Completed ✅
-- [x] Database schema designed (ER diagram created)
-- [x] MySQL database on Aiven with 3 tables
-- [x] 101 default exercises imported
-- [x] SQLAlchemy ORM models (User, Exercise, DefaultExercise, Routine)
-- [x] Pydantic schemas for validation
-- [x] User registration endpoint (creates user + copies exercises)
-- [x] User login endpoint (authentication with bcrypt)
-- [x] Exercise CRUD API endpoints
-- [x] CORS configured for frontend-backend communication
-- [x] Frontend registration page (dark mode, PaperCSS)
-- [x] Frontend login page (dark mode, PaperCSS)
-- [x] JavaScript API communication layer
-- [x] Virtual environment setup
-- [x] Git repository with proper .gitignore
+- [x] Database schema with 9 tables
+- [x] Complete backend API (20+ endpoints)
+- [x] User authentication system
+- [x] Profile management page
+- [x] Exercise management with muscle group tabs
+- [x] Routine builder (days + muscle groups per day)
+- [x] Workout calendar with advanced filtering
+- [x] Get WOD page with workout generation
+- [x] Workout completion and logging
+- [x] Session-based workout tracking
+- [x] Auto-increment exercise performance counts
+- [x] Weight tracking and updates
+- [x] Automatic day progression
+- [x] Exercise selection system
+- [x] Auto-generation algorithm
+- [x] Frontend-backend integration
+- [x] Dark theme UI/UX
+- [x] User logout functionality
+- [x] Display user first name in header
 
-### In Progress 🚧
-- [ ] Dashboard page UI
-- [ ] Exercises page UI (display, filter, edit)
-- [ ] User profile page
-- [ ] Routine creation interface
+### Known Limitations
+- No JWT tokens (using localStorage for session)
+- No password reset functionality
+- No data export feature
+- No analytics/charts visualization
+- No mobile-specific optimizations
+- CORS allows all origins (development mode)
 
-### Planned 📋
-- [ ] Routine management system
-- [ ] Workout logging functionality
-- [ ] Progress tracking (charts/graphs)
-- [ ] Balanced workout suggestions algorithm
-- [ ] JWT token-based authentication (upgrade from basic auth)
-- [ ] Password reset functionality
-- [ ] Deployment (Vercel/Netlify frontend + Railway backend)
+### Future Enhancements 📋
+- [ ] Analytics dashboard (charts, progress graphs)
+- [ ] Exercise demo videos/GIFs
+- [ ] Rest timer between sets
+- [ ] Personal records (PR) tracking
+- [ ] Workout notes/comments
+- [ ] Social features (share routines)
+- [ ] Mobile app (React Native)
+- [ ] JWT token authentication
+- [ ] Password reset via email
+- [ ] Export workout data (CSV/PDF)
+- [ ] Deployment (Vercel frontend + Railway backend)
 
 ## Development Workflow
 
 ### Starting Work Session
-
 ```bash
 # Terminal 1: Start backend
 cd FitJournal
@@ -303,34 +464,39 @@ git push
 - ✅ Passwords are hashed with bcrypt (never stored plain text)
 - ✅ `.env` file excluded from Git (contains credentials)
 - ✅ CORS configured (currently allows all origins for development)
+- ✅ SQL injection protection (SQLAlchemy ORM)
+- ✅ Input validation (Pydantic schemas)
 - ⚠️ TODO: Implement JWT tokens for stateless authentication
 - ⚠️ TODO: Add rate limiting on API endpoints
 - ⚠️ TODO: Implement HTTPS for production
-
-## Known Issues & TODOs
-
-1. **main.py cleanup needed** - Remove old CLI code (lines 206+)
-2. **Dashboard page missing** - Login redirects here but file doesn't exist
-3. **No JWT tokens yet** - Using basic session storage
-4. **CORS allows all origins** - Need to restrict in production
-5. **No input sanitization** - Add XSS protection
-6. **No rate limiting** - Vulnerable to brute force attacks
+- ⚠️ TODO: Add CSRF protection
 
 ## Testing
 
 ### Backend Testing (Swagger UI)
 1. Start backend: `uvicorn main:app --reload`
 2. Go to: `http://127.0.0.1:8000/docs`
-3. Test `/register` endpoint with sample data
-4. Test `/login` endpoint
-5. Test `/exercises` endpoints
+3. Test all endpoints with sample data
+4. Verify response codes and data structures
 
 ### Frontend Testing
 1. Start both servers (backend + frontend)
-2. Go to: `http://localhost:8080/registration.html`
-3. Create test account
-4. Login with test credentials
-5. Check browser console (F12) for errors
+2. Complete user registration
+3. Set up profile
+4. Add exercises to routine
+5. Create routine (select days and muscle groups)
+6. Select exercises in calendar
+7. Generate WOD
+8. Complete workout
+9. Verify workout appears in calendar history
+10. Test filtering (Current Day, All Days, specific days)
+
+### Test User Flow
+```
+1. Register → 2. Login → 3. Profile Setup → 
+4. View Exercises → 5. Build Routine → 6. Select Exercises → 
+7. Generate WOD → 8. Complete Workout → 9. View Calendar History
+```
 
 ## Contributing
 
@@ -351,10 +517,15 @@ GitHub: [https://github.com/leanardiles/FitJournal](https://github.com/leanardil
 
 This project is for educational purposes.
 
-## AI use
+## AI Assistance
 
-This READ ME file has been created with the help of Claude.ai
+This project was developed with the assistance of Claude.ai (Anthropic) for:
+- Code architecture and implementation guidance
+- Database schema design
+- Frontend-backend integration
+- Bug fixing and optimization
+- Documentation (README.md)
 
 ---
 
-*Last Updated: December 1, 2024*
+*Last Updated: December 6, 2024*
