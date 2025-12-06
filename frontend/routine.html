@@ -83,12 +83,32 @@
         let routineData = {};
         const muscleGroups = ['Legs', 'Shoulders', 'Chest', 'Glutes', 'Biceps', 'Triceps', 'Back', 'Calves', 'Abs'];
         
-        // Load existing routine on page load
+        // Load page data on DOMContentLoaded
         document.addEventListener('DOMContentLoaded', async () => {
-            const routine = await getUserRoutine();
+            // Load weight unit
+            await setWeightUnit();
             
-            if (routine && routine.days_per_week > 0) {
-                displayCurrentRoutine(routine);
+            // Load exercises
+            await loadExercises();
+            displayExercises(currentMuscleGroup);
+            
+            // Load user first name
+            let userName = getCurrentUserFirstName();
+            
+            // If first name not in localStorage, fetch from profile
+            if (!userName) {
+                const userId = getCurrentUserId();
+                const profile = await getUserProfile();
+                if (profile && profile.user_first_name) {
+                    userName = profile.user_first_name;
+                    localStorage.setItem('user_first_name', userName);
+                } else {
+                    userName = getCurrentUserEmail(); // Fallback to email if no first name
+                }
+            }
+            
+            if (userName) {
+                document.getElementById('user-email').textContent = userName;
             }
         });
         
@@ -262,26 +282,6 @@
             document.getElementById('current-routine').style.display = 'none';
             document.getElementById('step-1').style.display = 'block';
             document.getElementById('step-2').style.display = 'none';
-        });
-        // Load user first name on page load
-        document.addEventListener('DOMContentLoaded', async () => {
-            let userName = getCurrentUserFirstName();
-            
-            // If first name not in localStorage, fetch from profile
-            if (!userName) {
-                const userId = getCurrentUserId();
-                const profile = await getUserProfile();
-                if (profile && profile.user_first_name) {
-                    userName = profile.user_first_name;
-                    localStorage.setItem('user_first_name', userName);
-                } else {
-                    userName = getCurrentUserEmail(); // Fallback to email if no first name
-                }
-            }
-            
-            if (userName) {
-                document.getElementById('user-email').textContent = userName;
-            }
         });
     </script>
 </body>

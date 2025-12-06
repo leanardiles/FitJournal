@@ -72,8 +72,14 @@
             <!-- Right Side: Exercise List -->
             <div class="col-9">
                 <div id="exercise-list">
-                    <h3 id="muscle-group-title">Legs Exercises</h3>
+                    <h4 id="muscle-group-title">Legs Exercises</h4>
                     
+                    <!-- Save Changes Button -->
+                    <div style="text-align: right; margin-bottom: 1rem;">
+                        <button id="save-changes-btn" class="btn-primary" style="padding: 0.75rem 2rem; font-size: 1rem;">
+                            SAVE
+                        </button>
+                    </div>
                     <!-- Exercise Table -->
                     <table class="table-hover">
                         <thead>
@@ -106,7 +112,14 @@
         // Protect page
         requireLogin();
         
-         let allExercises = [];
+        // Track changes
+        let pendingChanges = {
+            weights: {},      // { exercise_id: new_weight }
+            routineToggles: {} // { exercise_id: new_is_in_routine }
+        };
+        let hasUnsavedChanges = false;
+
+        let allExercises = [];
         let currentMuscleGroup = 'Legs';
 
         // Set weight unit based on user preference
@@ -185,77 +198,49 @@
             
             // Add event listeners for weight inputs
             document.querySelectorAll('.weight-input').forEach(input => {
-                input.addEventListener('blur', async (e) => {
-                    await updateExerciseWeight(e.target.dataset.exerciseId, parseFloat(e.target.value) || 0);
+                input.addEventListener('blur', (e) => {
+                    updateExerciseWeight(e.target.dataset.exerciseId, parseFloat(e.target.value) || 0);
                 });
             });
-            
+
             // Add event listeners for include checkboxes
             document.querySelectorAll('.include-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', async (e) => {
-                    await updateExerciseInclude(e.target.dataset.exerciseId, e.target.checked);
+                checkbox.addEventListener('change', (e) => {
+                    updateExerciseInclude(e.target.dataset.exerciseId, e.target.checked);
                 });
             });
         }
         
         // Update exercise weight
-        async function updateExerciseWeight(exerciseId, weight) {
-            const userId = getCurrentUserId();
+        function updateExerciseWeight(exerciseId, weight) {
+            // Track the change (don't save yet)
+            pendingChanges.weights[exerciseId] = weight;
+            hasUnsavedChanges = true;
             
-            try {
-                const response = await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        exercise_user_current_weight: weight
-                    })
-                });
-                
-                if (response.ok) {
-                    console.log('Weight updated successfully');
-                    // Update local data
-                    const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
-                    if (exercise) {
-                        exercise.exercise_user_current_weight = weight;
-                    }
-                } else {
-                    console.error('Failed to update weight');
-                }
-            } catch (error) {
-                console.error('Error updating weight:', error);
+            // Update local data for display
+            const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+            if (exercise) {
+                exercise.exercise_user_current_weight = weight;
             }
+            
+            // Update button appearance
+            updateSaveButton();
         }
-        
+
         // Update exercise include status
-        async function updateExerciseInclude(exerciseId, isIncluded) {
-            const userId = getCurrentUserId();
+        function updateExerciseInclude(exerciseId, isIncluded) {
+            // Track the change (don't save yet)
+            pendingChanges.routineToggles[exerciseId] = isIncluded;
+            hasUnsavedChanges = true;
             
-            try {
-                const response = await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        exercise_is_in_routine: isIncluded
-                    })
-                });
-                
-                if (response.ok) {
-                    console.log('Include status updated successfully');
-                    // Update local data
-                    const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
-                    if (exercise) {
-                        exercise.exercise_is_in_routine = isIncluded;
-                    }
-                } else {
-                    console.error('Failed to update include status');
-                }
-            } catch (error) {
-                console.error('Error updating include status:', error);
+            // Update local data for display
+            const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+            if (exercise) {
+                exercise.exercise_is_in_routine = isIncluded;
             }
+            
+            // Update button appearance
+            updateSaveButton();
         }
         
         // Handle tab changes
@@ -283,6 +268,97 @@
             
             if (userName) {
                 document.getElementById('user-email').textContent = userName;
+            }
+        });
+
+        // Update save button appearance
+        function updateSaveButton() {
+            const btn = document.getElementById('save-changes-btn');
+            if (hasUnsavedChanges) {
+                btn.style.backgroundColor = '#5595ce';
+                btn.textContent = 'SAVE *';
+            } else {
+                btn.style.backgroundColor = '#4a4a4a';
+                btn.textContent = 'SAVE';
+            }
+        }
+
+        // Save all changes
+        document.getElementById('save-changes-btn').addEventListener('click', async () => {
+            if (!hasUnsavedChanges) {
+                alert('No changes to save');
+                return;
+            }
+            
+            const userId = getCurrentUserId();
+            const btn = document.getElementById('save-changes-btn');
+            
+            try {
+                btn.textContent = 'Saving...';
+                btn.disabled = true;
+                
+                let savedCount = 0;
+                
+                // Collect all changes and merge them
+                const exercisesToUpdate = new Map();
+
+                // Add weight changes
+                for (const [exerciseId, weight] of Object.entries(pendingChanges.weights)) {
+                    if (!exercisesToUpdate.has(exerciseId)) {
+                        const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+                        exercisesToUpdate.set(exerciseId, { ...exercise });
+                    }
+                    exercisesToUpdate.get(exerciseId).exercise_user_current_weight = weight;
+                }
+
+                // Add routine toggle changes
+                for (const [exerciseId, isInRoutine] of Object.entries(pendingChanges.routineToggles)) {
+                    if (!exercisesToUpdate.has(exerciseId)) {
+                        const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
+                        exercisesToUpdate.set(exerciseId, { ...exercise });
+                    }
+                    exercisesToUpdate.get(exerciseId).exercise_is_in_routine = isInRoutine;
+                }
+
+                // Save all updated exercises
+                for (const [exerciseId, exerciseData] of exercisesToUpdate) {
+                    const response = await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            exercise_name: exerciseData.exercise_name,
+                            exercise_muscle_group: exerciseData.exercise_muscle_group,
+                            exercise_user_current_weight: exerciseData.exercise_user_current_weight,
+                            exercise_is_in_routine: exerciseData.exercise_is_in_routine,
+                            exercise_link: exerciseData.exercise_link || null,
+                            comments: exerciseData.comments || null
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        savedCount++;
+                    } else {
+                        console.error(`Failed to update exercise ${exerciseId}:`, await response.text());
+                    }
+                }
+                
+                // Clear pending changes
+                pendingChanges = { weights: {}, routineToggles: {} };
+                hasUnsavedChanges = false;
+                
+                // Update button
+                updateSaveButton();
+                btn.disabled = false;
+                
+                alert(`${savedCount} change(s) saved successfully!`);
+                
+            } catch (error) {
+                console.error('Error saving changes:', error);
+                alert('Error saving changes. Please try again.');
+                btn.textContent = 'SAVE *';
+                btn.disabled = false;
             }
         });
     </script>
