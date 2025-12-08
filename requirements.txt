@@ -2,23 +2,24 @@
 # Python 3.8+
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi==0.115.4
+uvicorn[standard]==0.32.1
 
 # Database
-sqlalchemy==2.0.23
-pymysql==1.1.0
+sqlalchemy==2.0.36
+pymysql==1.1.1
 
 # Configuration
-python-dotenv==1.0.0
+python-dotenv==1.0.1
 
 # Security & Authentication
 passlib[bcrypt]==1.7.4
-cryptography==41.0.7
+cryptography==43.0.3
 
 # Data Validation
-pydantic[email]==2.5.0
+pydantic[email]==2.10.3
+pydantic-settings==2.6.1
 
 # Optional: Development/Testing
-# pytest==7.4.3
-# httpx==0.25.2
+# pytest==8.3.4
+# httpx==0.28.1
