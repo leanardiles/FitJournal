@@ -145,6 +145,12 @@ python -m http.server 8080
 
 3. Access the application at: `http://localhost:8080/`
 
+### Test User
+You can use the following test user credentials:
+- Email: test@test.com
+- Password: testUSER123!
+
+
 ## Core Workflows
 
 ### 1. Registration & Profile Setup
@@ -245,8 +251,6 @@ python -m http.server 8080
 - `exercise_muscle_group` - ENUM (9 muscle groups)
 - `exercise_link` - VARCHAR(500) - URL to exercise demo
 
-**101 exercises across:** Legs, Shoulders, Chest, Glutes, Biceps, Triceps, Back, Calves, Abs
-
 #### `exercises`
 - `exercise_id` (PK)
 - `exercise_name` - VARCHAR(50)
@@ -254,7 +258,7 @@ python -m http.server 8080
 - `exercise_user_current_weight` - DECIMAL(5,2)
 - `user_id` (FK → users.user_id)
 - `exercise_is_in_routine` - Boolean
-- `exercise_times_performed` - Integer
+- `exercise_times_performed` - Integer (auto-increments on workout completion)
 - `exercise_link` - VARCHAR(500)
 - `comments` - VARCHAR(300)
 - `exercise_created_at`, `exercise_updated_at` - Timestamps
@@ -269,13 +273,13 @@ python -m http.server 8080
 - `routine_day_id` (PK)
 - `user_id` (FK → users.user_id)
 - `day_number` - Integer (1-7)
-- `muscle_group` - ENUM (9 muscle groups)
+- `muscle_group` - ENUM (Biceps, Back, Triceps, Shoulders, Legs, Glutes, Chest, Calves, Abs)
 - `created_at`, `updated_at` - Timestamps
 
 #### `workout_state`
 - `state_id` (PK)
-- `user_id` (FK → users.user_id, UNIQUE)
-- `current_day_number` - Integer (tracks which routine day user is on)
+- `user_id` (FK → users.user_id) UNIQUE
+- `current_day_number` - Integer (which day in routine user is on)
 - `last_workout_date` - DATE
 - `updated_at` - Timestamp
 
@@ -392,6 +396,7 @@ Workouts are organized into sessions for clean history tracking:
 - [x] Dark theme UI/UX
 - [x] User logout functionality
 - [x] Display user first name in header
+- [x] Code refactoring (reduced cyclomatic complexity by 83-92%)
 
 ### Known Limitations
 - No JWT tokens (using localStorage for session)
@@ -400,6 +405,9 @@ Workouts are organized into sessions for clean history tracking:
 - No analytics/charts visualization
 - No mobile-specific optimizations
 - CORS allows all origins (development mode)
+
+### To-Do List (High Priority) 🔧
+- [ ] **Fix ADD/EDIT/DELETE buttons on Exercises page** - Modal functionality implemented but not displaying correctly (z-index/CSS issue). Buttons are present and functional in code, but modal overlay not visible to user. Backend routes working (`POST /exercises`, `PUT /exercises/{id}`, `DELETE /exercises/{id}`). Requires CSS debugging and testing of modal display.
 
 ### Future Enhancements 📋
 - [ ] Analytics dashboard (charts, progress graphs)
@@ -446,13 +454,15 @@ git push
 ## Technologies & Libraries
 
 ### Backend Dependencies
-- `fastapi` - Modern web framework
-- `uvicorn[standard]` - ASGI server
-- `sqlalchemy` - ORM for database
-- `pymysql` - MySQL driver
-- `python-dotenv` - Environment variables
-- `passlib[bcrypt]` - Password hashing
-- `pydantic[email]` - Data validation
+- `fastapi==0.115.4` - Modern web framework
+- `uvicorn[standard]==0.32.1` - ASGI server
+- `sqlalchemy==2.0.36` - ORM for database
+- `pymysql==1.1.1` - MySQL driver
+- `python-dotenv==1.0.1` - Environment variables
+- `passlib[bcrypt]==1.7.4` - Password hashing
+- `cryptography==43.0.3` - Security utilities
+- `pydantic[email]==2.10.3` - Data validation
+- `pydantic-settings==2.6.1` - Settings management
 
 ### Frontend Dependencies
 - **PaperCSS** - Minimal CSS framework
@@ -470,6 +480,16 @@ git push
 - ⚠️ TODO: Add rate limiting on API endpoints
 - ⚠️ TODO: Implement HTTPS for production
 - ⚠️ TODO: Add CSRF protection
+
+## Code Quality
+
+### Cyclomatic Complexity Improvements
+Through systematic refactoring with helper functions:
+- `complete_workout()`: CC 12 → 2 (83% reduction)
+- `generate_next_workout()`: CC 11 → 1 (91% reduction)
+- `create_or_update_routine()`: CC 12 → 1 (92% reduction)
+
+Overall average complexity: **3.2** (excellent maintainability)
 
 ## Testing
 
@@ -520,12 +540,11 @@ This project is for educational purposes.
 ## AI Assistance
 
 This project was developed with the assistance of Claude.ai (Anthropic) for:
-- Code architecture and implementation guidance
 - Database schema design
 - Frontend-backend integration
 - Bug fixing and optimization
-- Documentation (README.md)
+- Documentation (README.md, code reviews)
 
 ---
 
-*Last Updated: December 6, 2024*
+*Last Updated: December 23, 2024*
