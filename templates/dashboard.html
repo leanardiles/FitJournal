@@ -34,6 +34,15 @@
         text-decoration-color: var(--red);
         text-underline-offset: 3px;
     }
+
+    /* Sets-by-muscle module */
+    .nb-week-toggle { display: flex; gap: 8px; margin-bottom: 6px; }
+    .nb-wk-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Patrick Hand', cursive; font-size: 13px; padding: 0 10px; height: calc(var(--lh) - 12px); border-radius: 8px; cursor: pointer; transition: all 0.12s; }
+    .nb-wk-btn:hover { color: var(--text); }
+    .nb-wk-btn.nb-selected { border-color: var(--red-border); color: #ccc; background: var(--active-bg); }
+    .nb-muscle-sum-row { display: flex; align-items: flex-end; min-height: var(--lh); padding-bottom: 4px; gap: 10px; }
+    .nb-muscle-sum-name { flex: 1; color: var(--text); font-size: var(--fs); }
+    .nb-muscle-sum-sets { color: var(--red); font-size: var(--fs); }
 </style>
 {% endblock %}
 
@@ -63,8 +72,17 @@
         </div>
     </div>
 
-    <!-- Right column (future module) -->
-    <div class="nb-module"></div>
+    <!-- Right column: sets per muscle this week -->
+    <div class="nb-module">
+        <div class="nb-section-label">sets per muscle</div>
+        <div class="nb-week-toggle">
+            <button type="button" class="nb-wk-btn nb-selected" data-mode="week">This week</button>
+            <button type="button" class="nb-wk-btn" data-mode="7day">Last 7 days</button>
+        </div>
+        <div id="muscle-summary">
+            <div class="nb-row"><span style="color: var(--muted);">Loading...</span></div>
+        </div>
+    </div>
 </div>
 <div id="message" class="nb-message" style="display:none;"></div>
 
@@ -74,7 +92,7 @@
 <script>
     if (requireLogin()) {
         document.addEventListener('DOMContentLoaded', async () => {
-            await Promise.all([loadRoutine(), loadStats()]);
+            await Promise.all([loadRoutine(), loadStats(), loadMuscleSummary()]);
         });
     }
 
@@ -155,6 +173,78 @@
             </div>`;
 
         container.innerHTML = html;
+    }
+
+    // ---------- Sets per muscle (this week / last 7 days) ----------
+    let smLogs = [];
+    let smExMuscle = {};   // exercise_id -> muscle_group
+    let smMode = 'week';   // 'week' (Mon-based) | '7day' (rolling)
+
+    async function loadMuscleSummary() {
+        const userId = getCurrentUserId();
+        const [logs, exercises] = await Promise.all([
+            getWorkoutLogs(userId, 300),   // generous window; we filter to the week client-side
+            getUserExercises(),
+        ]);
+        smLogs = logs || [];
+        smExMuscle = {};
+        (exercises || []).forEach(ex => { smExMuscle[ex.exercise_id] = ex.exercise_muscle_group; });
+
+        document.querySelectorAll('.nb-wk-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                smMode = e.target.dataset.mode;
+                document.querySelectorAll('.nb-wk-btn').forEach(b => b.classList.remove('nb-selected'));
+                e.target.classList.add('nb-selected');
+                renderMuscleSummary();
+            });
+        });
+
+        renderMuscleSummary();
+    }
+
+    function smWindowStart() {
+        const now = new Date();
+        if (smMode === '7day') {
+            const d = new Date(now);
+            d.setDate(d.getDate() - 6);   // rolling 7 days, including today
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+        // Monday-based current week (matches the 'This week' quick stat)
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(now);
+        monday.setDate(diff);
+        monday.setHours(0, 0, 0, 0);
+        return monday;
+    }
+
+    function renderMuscleSummary() {
+        const container = document.getElementById('muscle-summary');
+        const start = smWindowStart();
+
+        const totals = {};
+        smLogs.forEach(log => {
+            if (new Date(log.workout_date) < start) return;
+            const muscle = smExMuscle[log.exercise_id];
+            if (!muscle) return;   // exercise no longer in the library
+            totals[muscle] = (totals[muscle] || 0) + (log.sets_completed || 0);
+        });
+
+        const entries = Object.entries(totals)
+            .filter(([, sets]) => sets > 0)
+            .sort((a, b) => b[1] - a[1]);
+
+        if (!entries.length) {
+            container.innerHTML = '<div class="nb-row"><span style="color: var(--muted);">No sets logged in this window.</span></div>';
+            return;
+        }
+
+        container.innerHTML = entries.map(([muscle, sets]) => `
+            <div class="nb-muscle-sum-row">
+                <span class="nb-muscle-sum-name">${muscle}</span>
+                <span class="nb-muscle-sum-sets">${sets} ${sets === 1 ? 'set' : 'sets'}</span>
+            </div>`).join('');
     }
 </script>
 {% endblock %}

@@ -229,6 +229,26 @@
     .nb-manual-tab .cnt { margin-left: 6px; font-size: 11px; color: var(--red); }
     .nb-manual-list { flex: 1; padding-left: 20px; max-height: calc(var(--lh) * 6); overflow-y: auto; }
 
+    /* Manual day: grouping panel */
+    .nb-group-toggle { display: inline-flex; align-items: flex-end; min-height: var(--lh); padding-bottom: 4px; color: var(--red); font-size: 13px; cursor: pointer; user-select: none; }
+    .nb-group-toggle:hover { color: var(--text); }
+    .nb-group-panel { border-left: 2px solid var(--border); padding: 0 0 6px 12px; margin: 4px 0 8px; }
+    .nb-group-hint { font-size: 12px; color: var(--muted); min-height: var(--lh); display: flex; align-items: flex-end; padding-bottom: 4px; gap: 12px; }
+    .nb-group-row { display: flex; align-items: center; gap: 10px; min-height: var(--lh); padding-bottom: 2px; }
+    .nb-group-row.picked { background: var(--active-bg); }
+    .nb-group-tick { width: 14px; height: 14px; accent-color: rgba(150, 30, 30, 0.8); cursor: pointer; }
+    .nb-group-label { flex: 0 0 34px; font-size: 14px; letter-spacing: 0.5px; }
+    .nb-group-label.grouped { color: var(--red); cursor: pointer; }
+    .nb-group-label.grouped:hover { text-decoration: underline; }
+    .nb-group-label.solo { color: var(--muted); }
+    .nb-group-muscle { flex: 0 0 76px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .nb-group-name { flex: 1; color: var(--text); font-size: 14px; min-width: 0; }
+    .nb-group-btn { background: transparent; border: 1px solid var(--red-border); color: var(--red); font-family: 'Patrick Hand', cursive; font-size: 13px; padding: 0 12px; height: calc(var(--lh) - 12px); border-radius: 8px; cursor: pointer; }
+    .nb-group-btn:hover:not(:disabled) { color: #ccc; background: var(--active-bg); }
+    .nb-group-btn:disabled { opacity: 0.3; cursor: default; border-color: var(--border); color: var(--muted); }
+    .nb-zone-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); min-height: var(--lh); display: flex; align-items: flex-end; padding-bottom: 4px; }
+    .nb-group-sep { border-top: 1px dashed var(--border); margin: 4px 0; }
+
     /* Per-day type toggle (mixed routines) */
     .nb-daytype-group { display: flex; gap: 8px; margin: 2px 0 6px; }
     .nb-daytype-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Patrick Hand', cursive; font-size: 13px; padding: 0 12px; height: calc(var(--lh) - 12px); cursor: pointer; border-radius: 8px; transition: all 0.12s; }
@@ -516,7 +536,9 @@
                     </div>
                     <div class="nb-manual-list" data-day="${day}"></div>
                 </div>
-                <div class="nb-selected-tag">Selected:<span class="manual-count" data-day="${day}"> 0 exercises</span></div>`;
+                <div class="nb-selected-tag">Selected:<span class="manual-count" data-day="${day}"> 0 exercises</span></div>
+                <div class="nb-group-toggle" data-day="${day}" style="display:none;">&#9656; Group exercises (optional)</div>
+                <div class="nb-group-panel" data-day="${day}" style="display:none;"></div>`;
     }
 
     // Manual: pick a default muscle, render its list, wire the tabs and counts.
@@ -526,6 +548,28 @@
         tabs.forEach(t => t.classList.toggle('active', t.dataset.muscle === active));
         renderManualList(day, active);
         updateManualCounts(day);
+
+        // Grouping is opt-in: collapsed by default, but auto-opened when the day
+        // already has groups (editing a saved routine) so they aren't hidden away.
+        const st0 = days[day];
+        initGroupState(st0);
+        const hasGroups = st0.groupSeq.length > 0;
+        const panel0 = document.querySelector(`.nb-group-panel[data-day="${day}"]`);
+        const toggle0 = document.querySelector(`.nb-group-toggle[data-day="${day}"]`);
+        if (panel0) panel0.style.display = hasGroups ? 'block' : 'none';
+        if (toggle0) toggle0.innerHTML = (hasGroups ? '&#9662;' : '&#9656;') + ' Group exercises (optional)';
+
+        if (toggle0) {
+            toggle0.addEventListener('click', (e) => {
+                const d = parseInt(e.currentTarget.dataset.day);
+                const p = document.querySelector(`.nb-group-panel[data-day="${d}"]`);
+                const open = p.style.display !== 'none';
+                p.style.display = open ? 'none' : 'block';
+                e.currentTarget.innerHTML = (open ? '&#9656;' : '&#9662;') + ' Group exercises (optional)';
+            });
+        }
+
+        renderGroupPanel(day);
 
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -555,7 +599,9 @@
                 const d = parseInt(e.target.dataset.day);
                 const exId = parseInt(e.target.dataset.ex);
                 days[d].checked[exId] = e.target.checked;
+                syncOrder(d, exId, e.target.checked);
                 updateManualCounts(d);
+                renderGroupPanel(d);
             });
         });
     }
@@ -571,6 +617,177 @@
         });
         const tag = document.querySelector(`.manual-count[data-day="${day}"]`);
         if (tag) tag.textContent = ` ${total} exercise${total === 1 ? '' : 's'}`;
+    }
+
+    // ---------- Manual day grouping ----------
+    // st.order    : ordered array of exercise_ids (pick order; drives the unplaced list)
+    // st.groups   : { exercise_id: groupKey } — explicit membership. No entry = UNPLACED.
+    // st.groupSeq : ordered array of groupKeys — THE sequence. Letters derive from this.
+    // st.picked   : { exercise_id: true } — transient ticks for the next 'Group selected'
+    // Grouping (even one exercise) places it as the next letter, so grouping = ordering.
+    // Anything left unplaced is appended at the end, each as its own group, in pick order.
+
+    let groupKeyCounter = 0;
+
+    function initGroupState(st) {
+        if (!st.order) st.order = [];
+        if (!st.groups) st.groups = {};
+        if (!st.groupSeq) st.groupSeq = [];
+        if (!st.picked) st.picked = {};
+    }
+
+    function syncOrder(day, exId, isChecked) {
+        const st = days[day];
+        initGroupState(st);
+        if (isChecked) {
+            if (!st.order.includes(exId)) st.order.push(exId);
+        } else {
+            st.order = st.order.filter(id => id !== exId);
+            delete st.picked[exId];
+            removeFromGroups(st, exId);
+        }
+    }
+
+    function removeFromGroups(st, exId) {
+        const key = st.groups[exId];
+        if (key === undefined) return;
+        delete st.groups[exId];
+        // If that group is now empty, drop it from the sequence.
+        const stillHasMembers = Object.values(st.groups).includes(key);
+        if (!stillHasMembers) st.groupSeq = st.groupSeq.filter(k => k !== key);
+    }
+
+    function ensureOrder(day) {
+        const st = days[day];
+        initGroupState(st);
+        const checkedIds = [];
+        MUSCLE_GROUPS.forEach(m => {
+            (exercisesByMuscle[m] || []).forEach(ex => {
+                if (st.checked[ex.exercise_id]) checkedIds.push(ex.exercise_id);
+            });
+        });
+        st.order = st.order.filter(id => checkedIds.includes(id));
+        checkedIds.forEach(id => { if (!st.order.includes(id)) st.order.push(id); });
+        // Drop group membership for anything no longer selected
+        Object.keys(st.groups).map(Number).forEach(id => {
+            if (!st.order.includes(id)) removeFromGroups(st, id);
+        });
+    }
+
+    // The full day sequence: placed groups (in st.groupSeq order), then unplaced
+    // exercises appended as solo groups (in pick order). Returns [{letter, ids, key}]
+    function buildSequence(day) {
+        const st = days[day];
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const seq = [];
+
+        st.groupSeq.forEach(key => {
+            const ids = st.order.filter(id => st.groups[id] === key);
+            if (ids.length) seq.push({ ids, key, placed: true });
+        });
+
+        st.order.forEach(id => {
+            if (st.groups[id] === undefined) seq.push({ ids: [id], key: null, placed: false });
+        });
+
+        seq.forEach((g, idx) => { g.letter = letters[idx] || '?'; });
+        return seq;
+    }
+
+    function exById(id) {
+        return allExercises.find(e => e.exercise_id === id);
+    }
+
+    function groupRowHTML(day, id, label, picked, placed) {
+        const ex = exById(id);
+        if (!ex) return '';
+        return `
+            <div class="nb-group-row${picked ? ' picked' : ''}" data-day="${day}" data-ex="${id}">
+                <input type="checkbox" class="nb-group-tick" data-day="${day}" data-ex="${id}" ${picked ? 'checked' : ''} ${placed ? 'disabled' : ''}>
+                <span class="nb-group-label ${placed ? 'grouped' : 'solo'}" data-day="${day}" data-ex="${id}" title="${placed ? 'Click to unplace' : ''}">${label}</span>
+                <span class="nb-group-muscle">${ex.exercise_muscle_group}</span>
+                <span class="nb-group-name">${ex.exercise_name}</span>
+            </div>`;
+    }
+
+    function renderGroupPanel(day) {
+        const st = days[day];
+        ensureOrder(day);
+        const panel = document.querySelector(`.nb-group-panel[data-day="${day}"]`);
+        const toggle = document.querySelector(`.nb-group-toggle[data-day="${day}"]`);
+        if (!panel) return;
+
+        // The grouping option only appears once there are exercises to group.
+        if (toggle) toggle.style.display = st.order.length ? 'inline-flex' : 'none';
+
+        if (!st.order.length) {
+            panel.innerHTML = '';
+            panel.style.display = 'none';
+            return;
+        }
+
+        const seq = buildSequence(day);
+        const placed = seq.filter(g => g.placed);
+        const unplaced = seq.filter(g => !g.placed);
+        const pickedCount = Object.values(st.picked).filter(Boolean).length;
+
+        let html = `
+            <div class="nb-group-hint">
+                <span>Tick the exercises you do together (or one on its own), then group them to place it in order.</span>
+                <button type="button" class="nb-group-btn" data-day="${day}" ${pickedCount < 1 ? 'disabled' : ''}>Group selected${pickedCount ? ` (${pickedCount})` : ''}</button>
+            </div>`;
+
+        if (placed.length) {
+            placed.forEach(g => {
+                g.ids.forEach((id, n) => {
+                    html += groupRowHTML(day, id, `${g.letter}${n + 1}`, false, true);
+                });
+            });
+        }
+
+        if (unplaced.length) {
+            if (placed.length) html += '<div class="nb-group-sep"></div>';
+            html += '<div class="nb-zone-label">Not yet placed</div>';
+            unplaced.forEach(g => {
+                const id = g.ids[0];
+                html += groupRowHTML(day, id, '—', !!st.picked[id], false);
+            });
+        }
+
+        const wasOpen = panel.style.display !== 'none';
+        panel.innerHTML = html;
+        panel.style.display = wasOpen ? 'block' : 'none';
+
+        panel.querySelectorAll('.nb-group-tick:not(:disabled)').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const d = parseInt(e.target.dataset.day);
+                const id = parseInt(e.target.dataset.ex);
+                days[d].picked[id] = e.target.checked;
+                renderGroupPanel(d);
+            });
+        });
+
+        panel.querySelectorAll('.nb-group-label.grouped').forEach(lbl => {
+            lbl.addEventListener('click', (e) => {
+                const d = parseInt(e.currentTarget.dataset.day);
+                const id = parseInt(e.currentTarget.dataset.ex);
+                removeFromGroups(days[d], id);   // back to 'not yet placed'
+                renderGroupPanel(d);
+            });
+        });
+
+        const gbtn = panel.querySelector('.nb-group-btn');
+        if (gbtn) gbtn.addEventListener('click', (e) => {
+            const d = parseInt(e.currentTarget.dataset.day);
+            const stt = days[d];
+            const ids = stt.order.filter(id => stt.picked[id] && stt.groups[id] === undefined);
+            if (!ids.length) return;
+            const key = ++groupKeyCounter;
+            ids.forEach(id => { stt.groups[id] = key; });
+            stt.groupSeq.push(key);          // appended -> gets the next letter
+            stt.picked = {};
+            renderGroupPanel(d);
+        });
     }
 
     function onToggleMuscle(e) {
@@ -680,7 +897,19 @@
                         if (st.checked[ex.exercise_id]) exercise_ids.push(ex.exercise_id);
                     });
                 });
-                daysArr.push({ day_number: d, day_type: 'manual', name: st.name.trim() || null, muscles: [], exercise_ids: exercise_ids });
+                const dayPayload = { day_number: d, day_type: 'manual', name: st.name.trim() || null, muscles: [], exercise_ids: exercise_ids };
+                // Grouping is optional: only send it if the user grouped something.
+                ensureOrder(d);
+                if (st.groupSeq && st.groupSeq.length > 0) {
+                    const groups = [];
+                    buildSequence(d).forEach((g, gi) => {
+                        g.ids.forEach((id, pos) => {
+                            groups.push({ exercise_id: id, group_index: gi, position: pos });
+                        });
+                    });
+                    dayPayload.exercise_groups = groups;
+                }
+                daysArr.push(dayPayload);
                 continue;
             }
 
@@ -889,7 +1118,24 @@
             const st = { type: d.day_type, name: d.name || '', muscles: new Set(), counts: {}, checked: {} };
             const savedIds = new Set((d.exercises || []).map(e => e.exercise_id));
             if (d.day_type === 'manual') {
-                savedIds.forEach(id => { st.checked[id] = true; });
+                const exs = d.exercises || [];   // ordered by (group_index, position)
+                st.order = exs.map(e => e.exercise_id);
+                st.groups = {};
+                st.groupSeq = [];
+                st.picked = {};
+                exs.forEach(e => { st.checked[e.exercise_id] = true; });
+                const hasGroups = exs.some(e => e.group_index !== null && e.group_index !== undefined);
+                if (hasGroups) {
+                    const keyByGi = {};
+                    exs.forEach(e => {
+                        const gi = e.group_index;
+                        if (!(gi in keyByGi)) {
+                            keyByGi[gi] = ++groupKeyCounter;
+                            st.groupSeq.push(keyByGi[gi]);
+                        }
+                        st.groups[e.exercise_id] = keyByGi[gi];
+                    });
+                }
             } else {
                 (d.muscles || []).forEach(m => {
                     st.muscles.add(m.muscle_group);

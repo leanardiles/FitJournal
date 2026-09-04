@@ -150,20 +150,25 @@ html, body {
   gap: 10px;
   padding: 0 18px 5px 32px;
   height: var(--lh);
-  color: var(--muted);
+  color: var(--text);
   text-decoration: none;
-  font-size: alc(var(--fs) + 1px);
+  font-size: calc(var(--fs) + 3px);
   cursor: pointer;
   transition: color 0.1s;
   white-space: nowrap;
 }
 
-#nb-sidebar nav a:hover { color: #aaa; }
+#nb-sidebar nav a:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--text);
+    text-underline-offset: 4px;
+}
+
 #nb-sidebar nav a.nb-active {
-  color: #e0e0e0;
-  text-decoration: underline;
-  text-decoration-color: var(--red-border);
-  text-underline-offset: 4px;
+    color: var(--text);
+    text-decoration: underline;
+    text-decoration-color: var(--red);
+    text-underline-offset: 4px;
 }
 
 #nb-sidebar nav a .nb-dot {

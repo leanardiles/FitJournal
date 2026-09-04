@@ -1,6 +1,6 @@
 # Standard library imports
 from datetime import date, datetime, timedelta
-from typing import List
+from typing import List, Optional
 import os
 import pytz
 
@@ -16,6 +16,7 @@ from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from pydantic import BaseModel
 
 # Local imports
 import models
@@ -212,12 +213,12 @@ async def calendar_page(request: Request):
         "page_title": "Calendar"
     })
 
-@app.get("/web/getwod")
-async def getwod_page(request: Request):
-    return templates.TemplateResponse("getwod.html", {
+@app.get("/web/logwod")
+async def logwod_page(request: Request):
+    return templates.TemplateResponse("logwod.html", {
         "request": request,
-        "active_page": "getwod",
-        "page_title": "Get WOD"
+        "active_page": "logwod",
+        "page_title": "Log WOD"
     })
 
 # ========== USER AUTHENTICATION ROUTES ==========
@@ -487,13 +488,14 @@ def get_routine(user_id: int, db: Session = Depends(get_db), current_user: model
         models.Exercise, models.TrainingDayExercise.exercise_id == models.Exercise.exercise_id
     ).filter(
         models.TrainingDayExercise.training_day_id.in_(day_ids)
-    ).order_by(models.TrainingDayExercise.position).all()
+    ).order_by(models.TrainingDayExercise.group_index, models.TrainingDayExercise.position).all()
     for tde, ex in tde_rows:
         exercises_by_day.setdefault(tde.training_day_id, []).append({
             "exercise_id": ex.exercise_id,
             "exercise_name": ex.exercise_name,
             "muscle_group": _enum_str(ex.exercise_muscle_group),
             "position": tde.position,
+            "group_index": tde.group_index,
         })
 
     result_days = [
@@ -629,13 +631,37 @@ def create_or_update_routine(user_id: int, routine_data: schemas.RoutineSetup, d
                     exercise_count=m.exercise_count,
                 ))
 
-        for position, eid in enumerate(_dedup(d.exercise_ids)):
-            db.add(models.TrainingDayExercise(
-                user_id=user_id,
-                training_day_id=training_day.training_day_id,
-                exercise_id=eid,
-                position=position,
-            ))
+        if d.day_type == "manual" and d.exercise_groups:
+            # Grouped manual day: store the explicit group_index + position.
+            valid_ids = set(_dedup(d.exercise_ids))
+            seen = set()
+            for g in d.exercise_groups:
+                if g.exercise_id not in valid_ids or g.exercise_id in seen:
+                    continue
+                seen.add(g.exercise_id)
+                db.add(models.TrainingDayExercise(
+                    user_id=user_id,
+                    training_day_id=training_day.training_day_id,
+                    exercise_id=g.exercise_id,
+                    position=g.position,
+                    group_index=g.group_index,
+                ))
+            # Safety: any checked exercise not covered by groups is appended ungrouped.
+            for pos, eid in enumerate([x for x in _dedup(d.exercise_ids) if x not in seen], start=len(seen)):
+                db.add(models.TrainingDayExercise(
+                    user_id=user_id,
+                    training_day_id=training_day.training_day_id,
+                    exercise_id=eid,
+                    position=pos,
+                ))
+        else:
+            for position, eid in enumerate(_dedup(d.exercise_ids)):
+                db.add(models.TrainingDayExercise(
+                    user_id=user_id,
+                    training_day_id=training_day.training_day_id,
+                    exercise_id=eid,
+                    position=position,
+                ))
 
     # ---- Reconcile the rotation pool (exercises_in_routine) ----
     # Exercises used anywhere in the new routine (per_muscle pools + manual lists).
@@ -725,6 +751,31 @@ def get_workout_state(user_id: int, db: Session = Depends(get_db), current_user:
         db.refresh(state)
     
     return state
+
+@api_v1.post("/workout/state/{user_id}/current-day")
+def set_current_day(user_id: int, day_number: int, db: Session = Depends(get_db), current_user: models.User = Depends(verify_user_access)):
+    """
+    Set the user's current routine day. Used from Log WOD to skip or reorder
+    which day is trained next (e.g. skip leg day). day_number must be within
+    the routine's day count. Completion still advances the cursor from whatever
+    day is actually logged, so setting the current day + logging it moves the
+    cursor to the following day.
+    """
+    n_days = db.query(models.TrainingDay).filter(models.TrainingDay.user_id == user_id).count()
+    if n_days == 0:
+        raise HTTPException(status_code=400, detail="No routine set up")
+    if day_number < 1 or day_number > n_days:
+        raise HTTPException(status_code=400, detail=f"Day must be between 1 and {n_days}")
+
+    state = db.query(models.WorkoutState).filter(models.WorkoutState.user_id == user_id).first()
+    if not state:
+        state = models.WorkoutState(user_id=user_id, current_day_number=day_number)
+        db.add(state)
+    else:
+        state.current_day_number = day_number
+    db.commit()
+    return {"current_day_number": day_number}
+
 
 @api_v1.post("/workout/complete/{user_id}")
 def complete_workout(user_id: int, workout_data: schemas.WorkoutComplete, db: Session = Depends(get_db), current_user: models.User = Depends(verify_user_access)):
@@ -877,7 +928,97 @@ def cleanup_after_workout(user_id: int, completed_exercise_ids: list, current_da
     state.current_day_number = next_day
     state.last_workout_date = get_user_date(user_id, db)
 
+# ---- Manual (off-routine) workout logging ----
+# Could live in schemas.py; kept here to keep the feature self-contained.
+class ManualLogExercise(BaseModel):
+    exercise_id: int
+    sets_completed: int
+    reps_completed: Optional[int] = 0
+    weight_used: Optional[float] = None
+
+
+class ManualLogRequest(BaseModel):
+    workout_date: date
+    exercises: List[ManualLogExercise]
+
+
+@api_v1.post("/workout/log-manual/{user_id}")
+def log_manual_workout(user_id: int, data: ManualLogRequest, db: Session = Depends(get_db), current_user: models.User = Depends(verify_user_access)):
+    """
+    Log an off-routine ("manual") workout: exercises the user did on a chosen
+    date, not tied to any routine day. Creates a session + logs with
+    routine_day_number = NULL. Does NOT advance the routine cursor, and does
+    NOT touch the per_muscle rotation counter (manual logs are off-routine).
+    Updates each exercise's lifetime count and current weight.
+    """
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not data.exercises:
+        raise HTTPException(status_code=400, detail="Log at least one exercise.")
+
+    # Date can't be in the future (user's timezone)
+    if data.workout_date > get_user_date(user_id, db):
+        raise HTTPException(status_code=400, detail="Workout date can't be in the future.")
+
+    # Every exercise must belong to the user, and have at least one set
+    owned = {
+        eid for (eid,) in db.query(models.Exercise.exercise_id).filter(
+            models.Exercise.user_id == user_id
+        ).all()
+    }
+    for ex in data.exercises:
+        if ex.exercise_id not in owned:
+            raise HTTPException(status_code=400, detail=f"Exercise {ex.exercise_id} does not belong to you.")
+        if ex.sets_completed is None or ex.sets_completed < 1:
+            raise HTTPException(status_code=400, detail="Each exercise needs at least 1 set.")
+
+    # New session, no routine day
+    last_session = db.query(models.WorkoutSession).filter(
+        models.WorkoutSession.user_id == user_id
+    ).order_by(models.WorkoutSession.session_order.desc()).first()
+    next_order = (last_session.session_order + 1) if last_session else 1
+
+    session = models.WorkoutSession(
+        user_id=user_id,
+        routine_day_number=None,
+        workout_date=data.workout_date,
+        session_order=next_order,
+    )
+    db.add(session)
+    db.flush()
+
+    for ex in data.exercises:
+        db.add(models.WorkoutLog(
+            user_id=user_id,
+            routine_day_number=None,
+            exercise_id=ex.exercise_id,
+            sets_completed=ex.sets_completed,
+            reps_completed=ex.reps_completed or 0,
+            weight_used=ex.weight_used,
+            workout_date=data.workout_date,
+            session_id=session.session_id,
+        ))
+        exercise = db.query(models.Exercise).filter(
+            models.Exercise.exercise_id == ex.exercise_id
+        ).first()
+        if exercise:
+            exercise.exercise_times_performed += 1
+            if ex.weight_used and ex.weight_used > 0:
+                exercise.exercise_user_current_weight = ex.weight_used
+
+    db.commit()
+
+    return {
+        "message": "Manual workout logged",
+        "session_id": session.session_id,
+        "exercises_logged": len(data.exercises),
+    }
+
+
 @api_v1.get("/workout/logs/{user_id}")
+
 def get_workout_logs(user_id: int, limit: int = 30, db: Session = Depends(get_db), current_user: models.User = Depends(verify_user_access)):
     """
     Get user's workout history (last 30 days by default)
@@ -1059,7 +1200,7 @@ def choose_exercises_for_day(user_id: int, training_day, db: Session):
     if day_type == "manual":
         rows = db.query(models.TrainingDayExercise.exercise_id).filter(
             models.TrainingDayExercise.training_day_id == training_day.training_day_id
-        ).order_by(models.TrainingDayExercise.position).all()
+        ).order_by(models.TrainingDayExercise.group_index, models.TrainingDayExercise.position).all()
         return [r[0] for r in rows]
 
     # per_muscle: how many exercises to draw for each muscle on this day

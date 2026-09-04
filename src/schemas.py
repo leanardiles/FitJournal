@@ -89,12 +89,19 @@ class TrainingDayMuscleCreate(BaseModel):
     exercise_count: int = 3      # how many exercises to draw for this muscle (per_muscle)
 
 
+class TrainingDayExerciseGroup(BaseModel):
+    exercise_id: int
+    group_index: int    # 0 = group A, 1 = B, ... (also the group's order)
+    position: int       # order within the group (0-based)
+
+
 class TrainingDayCreate(BaseModel):
     day_number: int                              # 1-7
     day_type: str                                # "per_muscle" or "manual"
     name: Optional[str] = None                   # optional label, e.g. "Lower A"
     muscles: list[TrainingDayMuscleCreate] = []  # per_muscle days: muscles + counts
     exercise_ids: list[int] = []                 # per_muscle: the pool; manual: exact list
+    exercise_groups: list[TrainingDayExerciseGroup] = []  # manual days only: superset grouping
 
 
 class RoutineSetup(BaseModel):
@@ -113,6 +120,7 @@ class TrainingDayExerciseResponse(BaseModel):
     exercise_name: str
     muscle_group: str
     position: Optional[int] = None
+    group_index: Optional[int] = None    # manual days: which group (0=A...); NULL = ungrouped
 
 
 class TrainingDayResponse(BaseModel):

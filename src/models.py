@@ -208,7 +208,8 @@ class TrainingDayExercise(Base):
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     training_day_id = Column(Integer, ForeignKey("training_days.training_day_id", ondelete="CASCADE"), nullable=False)
     exercise_id = Column(Integer, ForeignKey("exercises.exercise_id", ondelete="CASCADE"), nullable=False)
-    position = Column(Integer, default=None)  # optional order hint within the day
+    position = Column(Integer, default=None)  # order within its group (0-based)
+    group_index = Column(Integer, default=None)  # manual days: which group (0=A, 1=B...); NULL = ungrouped
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
 
     # Relationships
@@ -266,7 +267,7 @@ class WorkoutLog(Base):
     
     log_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    routine_day_number = Column(Integer, nullable=False)
+    routine_day_number = Column(Integer, nullable=True)
     exercise_id = Column(Integer, ForeignKey("exercises.exercise_id", ondelete="CASCADE"), nullable=False)
     sets_completed = Column(Integer, default=0)
     reps_completed = Column(Integer, default=0)
@@ -278,7 +279,7 @@ class WorkoutLog(Base):
     # Relationships
     user = relationship("User", back_populates="workout_logs")
     exercise = relationship("Exercise")
-    session = relationship("WorkoutSession")  # ADD THIS LINE
+    session = relationship("WorkoutSession")
 
 
 class NextWorkoutSelection(Base):
@@ -300,7 +301,7 @@ class WorkoutSession(Base):
     
     session_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    routine_day_number = Column(Integer, nullable=False)
+    routine_day_number = Column(Integer, nullable=True)
     workout_date = Column(Date, nullable=False)
     session_order = Column(Integer, nullable=False)
     created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
