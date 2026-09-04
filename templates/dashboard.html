@@ -137,16 +137,7 @@
             currentDay = data.current_day_number;
         } catch(e) {}
 
-        // Routine type: uniform if all days share one, otherwise mixed
-        const dayTypes = new Set((routine.days || []).map(d => d.day_type));
-        let typeLabel = 'By muscle group';
-        if (dayTypes.size > 1) typeLabel = 'Mixed';
-        else if ([...dayTypes][0] === 'manual') typeLabel = 'Manual';
-
         let html = `
-            <div class="nb-row" style="color:var(--text);font-size:var(--fs);">
-                Routine type:<span style="color:var(--red);margin-left:6px;">${typeLabel}</span>
-            </div>
             <div class="nb-row" style="color:var(--text);font-size:var(--fs);">
                 Training <span style="color:var(--red);margin:0 4px;">${routine.days_per_week}</span> ${routine.days_per_week === 1 ? 'day' : 'days'} per week
             </div>`;

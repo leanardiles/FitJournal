@@ -13,7 +13,7 @@
     .nb-day-num-btn {
         background: transparent;
         border: 1px solid var(--border);
-        color: var(--muted);
+        color: var(--text);
         font-family: 'Patrick Hand', cursive;
         font-size: var(--fs);
         width: calc(var(--lh) - 6px);
@@ -34,38 +34,6 @@
     }
 
     /* Routine type buttons */
-    .nb-type-group {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        align-items: flex-end;
-        min-height: var(--lh);
-        padding-bottom: 4px;
-    }
-
-    .nb-type-btn {
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--muted);
-        font-family: 'Patrick Hand', cursive;
-        font-size: var(--fs);
-        padding: 0 16px;
-        height: calc(var(--lh) - 8px);
-        cursor: pointer;
-        border-radius: 8px;
-        transition: all 0.12s;
-    }
-
-    .nb-type-btn:hover { color: var(--text); }
-    .nb-type-btn.nb-selected {
-        border-color: var(--red-border);
-        color: #ccc;
-        background: var(--active-bg);
-    }
-
-    /* Type locked (edit mode): show the current type, but not changeable */
-    .nb-type-group.nb-locked .nb-type-btn { opacity: 0.45; pointer-events: none; cursor: default; }
-    .nb-type-group.nb-locked .nb-type-btn.nb-selected { opacity: 0.85; }
 
     .nb-muscle-group {
         display: flex;
@@ -286,6 +254,14 @@
     .nb-routine-ex-row { display: flex; gap: 2px; min-height: var(--lh); align-items: flex-end; padding-bottom: 4px; }
     .nb-routine-muscle { flex: 0 0 76px; min-width: 76px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
     .nb-routine-ex { flex: 1; color: var(--text); font-size: 12px; }
+
+    /* Day-count selector locked (edit mode): muted + non-clickable */
+    .nb-days-selector.nb-locked .nb-day-num-btn { color: var(--muted); pointer-events: none; cursor: default; }
+    .nb-days-selector.nb-locked .nb-day-num-btn.nb-selected { border-color: var(--red-border); }
+    /* Add-day + delete-day (edit mode) */
+    .nb-add-day { margin-top: 4px; }
+    .nb-day-del { background: transparent; border: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; margin-left: 10px; padding: 0 4px; }
+    .nb-day-del:hover { color: var(--red); }
 </style>
 {% endblock %}
 
@@ -303,17 +279,6 @@
         <button type="button" class="nb-day-num-btn" data-days="5">5</button>
         <button type="button" class="nb-day-num-btn" data-days="6">6</button>
         <button type="button" class="nb-day-num-btn" data-days="7">7</button>
-    </div>
-</div>
-
-<!-- STEP 2: Routine type -->
-<div id="step-2" style="display:none;">
-    <div class="nb-spacer"></div>
-    <div class="nb-row" style="color:var(--text);font-size:var(--fs);">How will you build it?</div>
-    <div class="nb-type-group">
-        <button type="button" class="nb-type-btn" data-type="per_muscle">By muscle group</button>
-        <button type="button" class="nb-type-btn" data-type="manual">Manual</button>
-        <button type="button" class="nb-type-btn" data-type="mixed">Mixed</button>
     </div>
 </div>
 
@@ -350,7 +315,7 @@
     const DEFAULT_COUNT = 3;
 
     let daysPerWeek = 0;
-    let routineType = null;
+    let routineType = 'mixed';      // one routine model: every day picks its own type
     let allExercises = [];
     let exercisesByMuscle = {};     // muscle -> [exercise, ...]
     let days = {};                  // day_number -> { name, muscles:Set, counts:{}, checked:{exId:bool} }
@@ -373,52 +338,20 @@
     // ---------- Step 1: days ----------
     document.querySelectorAll('.nb-day-num-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            if (editMode) return;   // selector is locked while editing (use + / × on days)
             daysPerWeek = parseInt(e.target.dataset.days);
             document.querySelectorAll('.nb-day-num-btn').forEach(b => b.classList.remove('nb-selected'));
             e.target.classList.add('nb-selected');
 
-            if (editMode) {
-                // Keep type and existing day data. Added days render empty;
-                // removed days stay in memory so re-adding restores them.
-                renderDaysEditor();
-                return;
-            }
-
-            // Create mode: reset downstream state when day count changes
-            routineType = null;
-            days = {};
-            document.querySelectorAll('.nb-type-btn').forEach(b => b.classList.remove('nb-selected'));
-            document.getElementById('step-2').style.display = 'block';
-            document.getElementById('step-3').style.display = 'none';
-        });
-    });
-
-    // ---------- Step 2: routine type ----------
-    document.querySelectorAll('.nb-type-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            if (editMode) return;  // type is locked while editing an existing routine
-            routineType = e.target.dataset.type;
-            document.querySelectorAll('.nb-type-btn').forEach(b => b.classList.remove('nb-selected'));
-            e.target.classList.add('nb-selected');
-
+            // Build the day editor. Existing day content is preserved when the
+            // count changes; days beyond the count stay in memory.
+            renderDaysEditor();
             document.getElementById('step-3').style.display = 'block';
-
-            buildEditor(routineType);
             document.getElementById('save-row').style.display = 'flex';
         });
     });
 
     // ---------- Per-muscle editor ----------
-    function buildEditor(type) {
-        // Create mode entry: start every day empty (of the chosen type), then render.
-        days = {};
-        for (let day = 1; day <= daysPerWeek; day++) {
-            // Mixed: each day starts typeless (user picks per day). Pure: all days share the type.
-            days[day] = { type: (type === 'mixed' ? null : type), name: '', muscles: new Set(), counts: {}, checked: {} };
-        }
-        renderDaysEditor();
-    }
-
     // Renders the per-day editor for days 1..daysPerWeek from the `days` state.
     // Each day renders per its type: per_muscle (muscle buttons + pool) or manual
     // (muscle-filter tabs + a checkbox list).
@@ -426,10 +359,10 @@
         const container = document.getElementById('days-container');
         container.innerHTML = '';
 
-        const showTypeToggle = (routineType === 'mixed');
+        const showTypeToggle = true;   // every day picks its own type
 
         for (let day = 1; day <= daysPerWeek; day++) {
-            if (!days[day]) days[day] = { type: (routineType === 'mixed' ? null : routineType), name: '', muscles: new Set(), counts: {}, checked: {} };
+            if (!days[day]) days[day] = { type: null, name: '', muscles: new Set(), counts: {}, checked: {} };
             const st = days[day];
 
             const dayDiv = document.createElement('div');
@@ -465,6 +398,55 @@
                 e.currentTarget.innerHTML = (open ? '&#9656;' : '&#9662;') + ' Select exercises to include';
             });
         });
+        // Delete-day buttons (edit mode)
+        container.querySelectorAll('.nb-day-del').forEach(btn => {
+            btn.addEventListener('click', (e) => deleteDay(parseInt(e.currentTarget.dataset.day)));
+        });
+        // Add-day button (edit mode)
+        if (editMode && daysPerWeek < 7) {
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'nb-btn nb-add-day';
+            addBtn.textContent = '+ Add day';
+            addBtn.addEventListener('click', addDay);
+            container.appendChild(addBtn);
+        }
+    }
+
+    function addDay() {
+        if (daysPerWeek >= 7) return;
+        daysPerWeek++;
+        days[daysPerWeek] = { type: null, name: '', muscles: new Set(), counts: {}, checked: {} };
+        renderDaysEditor();
+        updateDaySelector();
+    }
+
+    function dayHasAnyContent(st) {
+        if (!st) return false;
+        if (st.muscles && st.muscles.size) return true;
+        if (st.checked && Object.values(st.checked).some(Boolean)) return true;
+        return false;
+    }
+
+    function deleteDay(d) {
+        if (daysPerWeek <= 1) {
+            const m = document.getElementById('message');
+            m.textContent = 'A routine needs at least one day.';
+            m.className = 'nb-message error';
+            m.style.display = 'flex';
+            return;
+        }
+        if (dayHasAnyContent(days[d]) && !confirm(`Delete Day ${d}? Its exercises will be removed.`)) return;
+        for (let i = d; i < daysPerWeek; i++) days[i] = days[i + 1];
+        delete days[daysPerWeek];
+        daysPerWeek--;
+        renderDaysEditor();
+        updateDaySelector();
+    }
+
+    function updateDaySelector() {
+        document.querySelectorAll('.nb-day-num-btn').forEach(b =>
+            b.classList.toggle('nb-selected', parseInt(b.dataset.days) === daysPerWeek));
     }
 
     function dayBodyHTML(day, st) {
@@ -508,10 +490,14 @@
     }
 
     function headingHTML(day) {
+        const del = editMode
+            ? `<button type="button" class="nb-day-del" data-day="${day}" title="Delete this day">&#215;</button>`
+            : '';
         return `
                 <div class="nb-day-heading" data-day="${day}">
                     Day ${day}
                     <input type="text" class="nb-day-name-input" data-day="${day}" placeholder="name (optional)" maxlength="50">
+                    ${del}
                 </div>`;
     }
 
@@ -1019,24 +1005,17 @@
     // ---------- Current routine display ----------
     function displayCurrentRoutine(routine) {
         editMode = false;
-        document.querySelector('.nb-type-group').classList.remove('nb-locked');
+        document.querySelector('.nb-days-selector').classList.remove('nb-locked');
         document.getElementById('step-1').style.display = 'none';
-        document.getElementById('step-2').style.display = 'none';
         document.getElementById('step-3').style.display = 'none';
         document.getElementById('current-routine').style.display = 'block';
 
         // Routine type
         const dayTypes = new Set((routine.days || []).map(d => d.day_type));
-        let typeLabel = 'By muscle group';
-        if (dayTypes.size > 1) typeLabel = 'Mixed';
-        else if ([...dayTypes][0] === 'manual') typeLabel = 'Manual';
         const isMixed = dayTypes.size > 1;
 
         let html = `
             <div class="nb-section-label" style="color: var(--text);">Your current routine</div>
-            <div class="nb-row" style="color:var(--text);font-size:var(--fs);">
-                Routine type:<span style="color:var(--red);margin-left:6px;">${typeLabel}</span>
-            </div>
             <div class="nb-row" style="color:var(--text);font-size:var(--fs);">
                 Training <span style="color:var(--red);margin:0 4px;">${routine.days_per_week}</span> ${routine.days_per_week === 1 ? 'day' : 'days'} per week
             </div>
@@ -1118,13 +1097,9 @@
         const routine = await getUserRoutine();
         if (!routine || !routine.days_per_week) { resetToStart(); return; }
 
-        // Derive the routine's type: uniform if all days share one, else mixed.
-        const dayTypes = new Set((routine.days || []).map(d => d.day_type));
-        const derivedType = dayTypes.size === 1 ? [...dayTypes][0] : 'mixed';
-
         editMode = true;
         daysPerWeek = routine.days_per_week;
-        routineType = derivedType;
+        routineType = 'mixed';   // every day carries its own type
 
         // Prefill day state from the saved routine
         days = {};
@@ -1164,20 +1139,15 @@
             days[d.day_number] = st;
         });
 
-        // Show the editor: days live, type locked, step 3 prefilled
+        // Show the editor: day count locked (use + / × on days), days prefilled
         document.getElementById('current-routine').style.display = 'none';
         document.getElementById('step-1').style.display = 'block';
-        document.getElementById('step-2').style.display = 'block';
         document.getElementById('step-3').style.display = 'block';
         document.getElementById('save-row').style.display = 'flex';
         document.getElementById('message').style.display = 'none';
 
-        document.querySelectorAll('.nb-day-num-btn').forEach(b =>
-            b.classList.toggle('nb-selected', parseInt(b.dataset.days) === daysPerWeek));
-
-        document.querySelectorAll('.nb-type-btn').forEach(b =>
-            b.classList.toggle('nb-selected', b.dataset.type === routineType));
-        document.querySelector('.nb-type-group').classList.add('nb-locked');
+        document.querySelector('.nb-days-selector').classList.add('nb-locked');
+        updateDaySelector();
 
         renderDaysEditor();
     }
@@ -1186,14 +1156,12 @@
         editMode = false;
         document.getElementById('current-routine').style.display = 'none';
         document.getElementById('step-1').style.display = 'block';
-        document.getElementById('step-2').style.display = 'none';
         document.getElementById('step-3').style.display = 'none';
         document.getElementById('message').style.display = 'none';
         document.querySelectorAll('.nb-day-num-btn').forEach(b => b.classList.remove('nb-selected'));
-        document.querySelectorAll('.nb-type-btn').forEach(b => b.classList.remove('nb-selected'));
-        document.querySelector('.nb-type-group').classList.remove('nb-locked');
+        document.querySelector('.nb-days-selector').classList.remove('nb-locked');
         daysPerWeek = 0;
-        routineType = null;
+        routineType = 'mixed';
         days = {};
     }
 </script>
