@@ -157,6 +157,11 @@ def verify_user_access(
 async def root():
     return RedirectResponse(url="/web/login")
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # Browsers auto-request /favicon.ico at the root; point it at the real file.
+    return RedirectResponse(url="/static/images/favicon/favicon.ico")
+
 @app.get("/web/login")
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
