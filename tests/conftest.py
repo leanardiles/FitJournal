@@ -42,7 +42,8 @@ import main  # importing main triggers create_all on the (now test) engine
 # --- 4. Schema lifecycle: build tables once, drop them after the run ---------
 @pytest.fixture(scope="session", autouse=True)
 def _setup_test_schema():
-    """Create all tables in the test DB before tests, drop them after."""
+    """Start from a truly clean schema: drop any stale tables, then create fresh."""
+    models.Base.metadata.drop_all(bind=engine)
     models.Base.metadata.create_all(bind=engine)
     yield
     models.Base.metadata.drop_all(bind=engine)

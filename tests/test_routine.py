@@ -281,3 +281,84 @@ def test_toggle_accepts_string_user_id(auth):
         },
     )
     assert resp.status_code == 200, resp.text
+
+
+# --- manual-day exercise grouping (supersets) -------------------------------
+
+def _grouped_manual_day(day_number, groups):
+    """
+    groups: list of lists of exercise_ids; each inner list is one group, in order.
+    e.g. [[a, b], [c]] -> A1=a, A2=b (superset), B1=c (solo).
+    Returns a manual-day payload carrying both exercise_ids and exercise_groups.
+    """
+    exercise_ids = [eid for g in groups for eid in g]
+    exercise_groups = []
+    for gi, g in enumerate(groups):
+        for pos, eid in enumerate(g):
+            exercise_groups.append({"exercise_id": eid, "group_index": gi, "position": pos})
+    return {
+        "day_number": day_number,
+        "day_type": "manual",
+        "exercise_ids": exercise_ids,
+        "exercise_groups": exercise_groups,
+    }
+
+
+def test_grouped_manual_day_round_trips(auth):
+    """A grouped manual day saves and reads back in group order with group_index."""
+    a = _make_exercise(auth, "Bench Press", "Chest")
+    b = _make_exercise(auth, "Incline Press", "Chest")
+    c = _make_exercise(auth, "Row", "Back")
+
+    # A1=a, A2=b (superset), B1=c (solo)
+    resp = _save(auth, [_grouped_manual_day(1, [[a, b], [c]])])
+    assert resp.status_code in (200, 201), resp.text
+
+    day = auth["client"].get(
+        f"/v1/routine/{auth['user_id']}", headers=auth["headers"]
+    ).json()["days"][0]
+
+    # Order preserved: A1, A2, B1
+    assert [e["exercise_id"] for e in day["exercises"]] == [a, b, c]
+
+    gi = {e["exercise_id"]: e["group_index"] for e in day["exercises"]}
+    assert gi[a] == 0 and gi[b] == 0    # same group (A)
+    assert gi[c] == 1                   # next group (B)
+
+
+def test_ungrouped_manual_day_has_null_group_index(auth):
+    """A manual day saved without grouping has null group_index on its exercises."""
+    a = _make_exercise(auth, "Deadlift", "Back")
+    b = _make_exercise(auth, "Curl", "Biceps")
+
+    resp = _save(auth, [
+        {"day_number": 1, "day_type": "manual", "exercise_ids": [a, b]},
+    ])
+    assert resp.status_code in (200, 201), resp.text
+
+    day = auth["client"].get(
+        f"/v1/routine/{auth['user_id']}", headers=auth["headers"]
+    ).json()["days"][0]
+
+    assert all(e["group_index"] is None for e in day["exercises"])
+
+
+def test_grouping_order_across_three_groups(auth):
+    """Groups come back A, B, C in creation order, with order preserved throughout."""
+    a = _make_exercise(auth, "Bench Press", "Chest")
+    b = _make_exercise(auth, "Row", "Back")
+    c = _make_exercise(auth, "Squat", "Legs")
+    d = _make_exercise(auth, "Curl", "Biceps")
+
+    # A1=a, A2=b ; B1=c ; C1=d
+    _save(auth, [_grouped_manual_day(1, [[a, b], [c], [d]])])
+
+    day = auth["client"].get(
+        f"/v1/routine/{auth['user_id']}", headers=auth["headers"]
+    ).json()["days"][0]
+
+    assert [e["exercise_id"] for e in day["exercises"]] == [a, b, c, d]
+    gi = {e["exercise_id"]: e["group_index"] for e in day["exercises"]}
+    assert gi[a] == 0 and gi[b] == 0
+    assert gi[c] == 1
+    assert gi[d] == 2

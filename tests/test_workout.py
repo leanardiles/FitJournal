@@ -198,3 +198,141 @@ def test_complete_workout_increments_pool_counter(auth):
     assert resp.status_code == 200, resp.text
 
     assert _counter(uid, c1) == 1   # incremented on completion
+
+# --- manual (off-routine) workout logging -----------------------------------
+
+def _log_manual(auth, workout_date, exercises):
+    return auth["client"].post(
+        f"/v1/workout/log-manual/{auth['user_id']}",
+        headers=auth["headers"],
+        json={"workout_date": workout_date, "exercises": exercises},
+    )
+
+
+def test_manual_log_saves_with_null_routine_day(auth):
+    """A manual log saves logs with no routine day and shows up in history."""
+    ex = _make_exercise(auth, "Bench Press", "Chest")
+    resp = _log_manual(auth, "2020-06-15", [
+        {"exercise_id": ex, "sets_completed": 3, "reps_completed": 10, "weight_used": 50.0},
+    ])
+    assert resp.status_code == 200, resp.text
+
+    logs = auth["client"].get(
+        f"/v1/workout/logs/{auth['user_id']}", headers=auth["headers"]
+    ).json()
+    mine = [l for l in logs if l["exercise_id"] == ex]
+    assert len(mine) == 1
+    assert mine[0]["routine_day_number"] is None    # off-routine
+    assert mine[0]["sets_completed"] == 3
+
+
+def test_manual_log_rejects_future_date(auth):
+    """A future workout date is rejected."""
+    ex = _make_exercise(auth, "Bench Press", "Chest")
+    resp = _log_manual(auth, "2099-01-01", [
+        {"exercise_id": ex, "sets_completed": 3, "reps_completed": 8, "weight_used": None},
+    ])
+    assert resp.status_code == 400, resp.text
+
+
+def test_manual_log_does_not_advance_cursor(auth):
+    """Logging a manual workout must NOT move the routine's current_day_number."""
+    uid = auth["user_id"]
+    ex = _make_exercise(auth, "Bench Press", "Chest")
+
+    before = auth["client"].get(f"/v1/workout/state/{uid}", headers=auth["headers"]).json()
+    start_day = before["current_day_number"]
+
+    _log_manual(auth, "2020-06-15", [
+        {"exercise_id": ex, "sets_completed": 2, "reps_completed": 10, "weight_used": None},
+    ])
+
+    after = auth["client"].get(f"/v1/workout/state/{uid}", headers=auth["headers"]).json()
+    assert after["current_day_number"] == start_day   # unchanged
+
+
+def test_manual_log_rejects_unowned_exercise(auth):
+    """A manual log referencing another user's exercise is rejected."""
+    client = auth["client"]
+    client.post("/v1/register", json={"user_email": "mlother@example.com", "user_password": "testpass123"})
+    other = client.post("/v1/login", json={"user_email": "mlother@example.com", "user_password": "testpass123"}).json()
+    other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+    other_ex = client.post(
+        f"/v1/exercises?user_id={other['user_id']}",
+        headers=other_headers,
+        json={"exercise_name": "Foreign", "exercise_muscle_group": "Chest"},
+    ).json()["exercise_id"]
+
+    resp = _log_manual(auth, "2020-06-15", [
+        {"exercise_id": other_ex, "sets_completed": 3, "reps_completed": 10, "weight_used": None},
+    ])
+    assert resp.status_code == 400, resp.text
+
+
+# --- set current day (skip / reorder which day to train) --------------------
+
+def _pm_day(n, muscle, ids, count=1):
+    return {"day_number": n, "day_type": "per_muscle",
+            "muscles": [{"muscle_group": muscle, "exercise_count": count}], "exercise_ids": ids}
+
+
+def test_set_current_day_updates_state(auth):
+    """Setting the current day updates workout_state.current_day_number."""
+    uid = auth["user_id"]
+    c = _make_exercise(auth, "Bench Press", "Chest")
+    b = _make_exercise(auth, "Row", "Back")
+    l = _make_exercise(auth, "Squat", "Legs")
+    _save(auth, [_pm_day(1, "Chest", [c]), _pm_day(2, "Back", [b]), _pm_day(3, "Legs", [l])])
+
+    resp = auth["client"].post(
+        f"/v1/workout/state/{uid}/current-day?day_number=2", headers=auth["headers"]
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["current_day_number"] == 2
+
+    state = auth["client"].get(f"/v1/workout/state/{uid}", headers=auth["headers"]).json()
+    assert state["current_day_number"] == 2
+
+
+def test_set_current_day_rejects_out_of_range(auth):
+    """A day outside 1..N is rejected."""
+    uid = auth["user_id"]
+    c = _make_exercise(auth, "Bench Press", "Chest")
+    b = _make_exercise(auth, "Row", "Back")
+    _save(auth, [_pm_day(1, "Chest", [c]), _pm_day(2, "Back", [b])])
+
+    too_high = auth["client"].post(
+        f"/v1/workout/state/{uid}/current-day?day_number=5", headers=auth["headers"]
+    )
+    assert too_high.status_code == 400, too_high.text
+
+    too_low = auth["client"].post(
+        f"/v1/workout/state/{uid}/current-day?day_number=0", headers=auth["headers"]
+    )
+    assert too_low.status_code == 400, too_low.text
+
+
+def test_skip_day_then_complete_advances_from_chosen(auth):
+    """
+    Interpretation A: skip to day 2, complete it, and the cursor advances to 3
+    (the day after the one actually logged) rather than from the old day 1.
+    """
+    uid = auth["user_id"]
+    c = _make_exercise(auth, "Bench Press", "Chest")
+    b = _make_exercise(auth, "Row", "Back")
+    l = _make_exercise(auth, "Squat", "Legs")
+    _save(auth, [_pm_day(1, "Chest", [c]), _pm_day(2, "Back", [b]), _pm_day(3, "Legs", [l])])
+
+    auth["client"].post(f"/v1/workout/state/{uid}/current-day?day_number=2", headers=auth["headers"])
+
+    resp = auth["client"].post(
+        f"/v1/workout/complete/{uid}",
+        headers=auth["headers"],
+        json={"day_number": 2, "exercises": [
+            {"exercise_id": b, "sets_completed": 3, "reps_completed": 10, "weight_used": None},
+        ]},
+    )
+    assert resp.status_code == 200, resp.text
+
+    state = auth["client"].get(f"/v1/workout/state/{uid}", headers=auth["headers"]).json()
+    assert state["current_day_number"] == 3   # advanced from the day logged (2 -> 3)
