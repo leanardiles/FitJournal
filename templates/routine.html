@@ -246,6 +246,8 @@
     .nb-group-btn { background: transparent; border: 1px solid var(--red-border); color: var(--red); font-family: 'Patrick Hand', cursive; font-size: 13px; padding: 0 12px; height: calc(var(--lh) - 12px); border-radius: 8px; cursor: pointer; }
     .nb-group-btn:hover:not(:disabled) { color: #ccc; background: var(--active-bg); }
     .nb-group-btn:disabled { opacity: 0.3; cursor: default; border-color: var(--border); color: var(--muted); }
+    .nb-group-clear { background: transparent; border: none; color: var(--muted); font-family: 'Patrick Hand', cursive; font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0; }
+    .nb-group-clear:hover { color: var(--red); }
     .nb-zone-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); min-height: var(--lh); display: flex; align-items: flex-end; padding-bottom: 4px; }
     .nb-group-sep { border-top: 1px dashed var(--border); margin: 4px 0; }
 
@@ -735,6 +737,7 @@
             <div class="nb-group-hint">
                 <span>Tick the exercises you do together (or one on its own), then group them to place it in order.</span>
                 <button type="button" class="nb-group-btn" data-day="${day}" ${pickedCount < 1 ? 'disabled' : ''}>Group selected${pickedCount ? ` (${pickedCount})` : ''}</button>
+                ${placed.length ? `<button type="button" class="nb-group-clear" data-day="${day}">Clear grouping</button>` : ''}
             </div>`;
 
         if (placed.length) {
@@ -785,6 +788,17 @@
             const key = ++groupKeyCounter;
             ids.forEach(id => { stt.groups[id] = key; });
             stt.groupSeq.push(key);          // appended -> gets the next letter
+            stt.picked = {};
+            renderGroupPanel(d);
+        });
+
+        const clearBtn = panel.querySelector('.nb-group-clear');
+        if (clearBtn) clearBtn.addEventListener('click', (e) => {
+            const d = parseInt(e.currentTarget.dataset.day);
+            if (!confirm('Clear all grouping for this day? The exercises stay — only the grouping is removed.')) return;
+            const stt = days[d];
+            stt.groups = {};
+            stt.groupSeq = [];
             stt.picked = {};
             renderGroupPanel(d);
         });
