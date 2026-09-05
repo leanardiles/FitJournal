@@ -111,7 +111,6 @@ data class UserExercise(
     val exercise_name: String,
     val exercise_muscle_group: String,
     val exercise_user_current_weight: Float?,
-    val exercise_is_in_routine: Boolean,
     val exercise_times_performed: Int,
     val exercise_link: String?,
     val comments: String?
@@ -136,34 +135,78 @@ data class UpdateExerciseRequest(
 )
 
 
-/**
- * A single day in the routine setup request
- */
-data class RoutineDay(
-    val day_number: Int,
-    val muscle_groups: List<String>
+// ===== Routine models (training-day shape) =====
+// A routine is a list of days; each day is either per_muscle (a pool of
+// exercises per muscle, rotated by the backend) or manual (a fixed list).
+// The app READS every type; for now it only WRITES per_muscle days.
+
+/** A muscle targeted on a per_muscle day, with how many to draw per session. */
+data class TrainingDayMuscleRequest(
+    val muscle_group: String,
+    val exercise_count: Int = 3
 )
 
+/** Superset grouping for a manual day (write side; unused until parity). */
+data class TrainingDayExerciseGroup(
+    val exercise_id: Int,
+    val group_index: Int,
+    val position: Int
+)
+
+/** One day in the routine setup request. */
+data class TrainingDayRequest(
+    val day_number: Int,
+    val day_type: String,                                    // "per_muscle" | "manual"
+    val name: String? = null,
+    val muscles: List<TrainingDayMuscleRequest> = emptyList(),   // per_muscle days
+    val exercise_ids: List<Int> = emptyList(),                   // per_muscle pool / manual list
+    val exercise_groups: List<TrainingDayExerciseGroup> = emptyList()  // manual grouping (parity)
+)
 
 /**
- * Routine setup request body
+ * Routine setup request body.
  *
  * What we send to: POST /routine/{user_id}
+ * days_per_week is derived by the backend from the number of days.
  */
 data class RoutineSetupRequest(
-    val days_per_week: Int,
-    val routine_days: List<RoutineDay>
+    val days: List<TrainingDayRequest>
 )
 
 
+/** A muscle on a per_muscle day, as returned by the backend. */
+data class TrainingDayMuscleResponse(
+    val muscle_group: String,
+    val exercise_count: Int
+)
+
+/** An exercise attached to a day, as returned by the backend. */
+data class TrainingDayExerciseResponse(
+    val exercise_id: Int,
+    val exercise_name: String,
+    val muscle_group: String,
+    val position: Int? = null,
+    val group_index: Int? = null        // manual grouping; null = ungrouped
+)
+
+/** One day in the routine response. */
+data class TrainingDayResponse(
+    val training_day_id: Int,
+    val day_number: Int,
+    val day_type: String,
+    val name: String? = null,
+    val muscles: List<TrainingDayMuscleResponse> = emptyList(),
+    val exercises: List<TrainingDayExerciseResponse> = emptyList()
+)
+
 /**
- * Routine response from backend
+ * Routine response from backend.
  *
  * What we receive from: GET /routine/{user_id}
  */
 data class RoutineResponse(
     val days_per_week: Int,
-    val routine_days: Map<String, List<String>>  // "1" -> ["Legs", "Back"]
+    val days: List<TrainingDayResponse> = emptyList()
 )
 
 data class WorkoutSession(

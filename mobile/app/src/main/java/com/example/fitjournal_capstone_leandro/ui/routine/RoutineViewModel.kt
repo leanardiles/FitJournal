@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.fitjournal_capstone_leandro.analytics.AnalyticsLogger
+import com.example.fitjournal_capstone_leandro.data.model.TrainingDayResponse
 import com.example.fitjournal_capstone_leandro.data.repository.IUserRoutineRepository
 import com.example.fitjournal_capstone_leandro.data.repository.UserRoutineRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ data class RoutineScreenState(
     val selectedDays: Int = 0,               // days selected in editor
     val routineDays: Map<String, List<String>> = emptyMap(),  // existing routine from backend
     val editingDays: Map<Int, List<String>> = emptyMap(),     // being built in editor
+    val isPerMuscleOnly: Boolean = true,     // false if any day is manual (web-made) -> not editable on mobile yet
     val savedMessage: String? = null
 )
 
@@ -53,13 +55,19 @@ class RoutineViewModel(
             val result = repository.getRoutine()
             if (result.isSuccess) {
                 val routine = result.getOrNull()!!
-                if (routine.days_per_week == 0) {
+                if (routine.days_per_week == 0 || routine.days.isEmpty()) {
                     _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine)
                 } else {
+                    // Flatten the training-day response into the muscle-per-day map
+                    // the editor/display already work with.
+                    val displayMap = routine.days
+                        .sortedBy { it.day_number }
+                        .associate { it.day_number.toString() to musclesForDisplay(it) }
                     _state.value = _state.value.copy(
                         uiState = RoutineUiState.Success,
                         daysPerWeek = routine.days_per_week,
-                        routineDays = routine.routine_days
+                        routineDays = displayMap,
+                        isPerMuscleOnly = routine.days.all { it.day_type == "per_muscle" }
                     )
                 }
             } else {
@@ -71,6 +79,18 @@ class RoutineViewModel(
             }
         }
     }
+
+    /**
+     * The muscle groups to show for a day. per_muscle days list their
+     * chosen muscles directly; manual days (web-made) fall back to the
+     * distinct muscles of their exercises so they still display sensibly.
+     */
+    private fun musclesForDisplay(day: TrainingDayResponse): List<String> =
+        if (day.day_type == "manual") {
+            day.exercises.map { it.muscle_group }.distinct()
+        } else {
+            day.muscles.map { it.muscle_group }
+        }
 
     /**
      * User selected number of training days — move to editing mode

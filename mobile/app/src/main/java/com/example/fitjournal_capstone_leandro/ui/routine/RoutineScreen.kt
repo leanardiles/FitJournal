@@ -280,11 +280,22 @@ private fun ViewRoutineContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
-            onClick = onEdit,
-            colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark)
-        ) {
-            Text("Edit Routine", color = Color.White, fontFamily = myCustomFont)
+        // The mobile editor only builds per_muscle routines for now. A routine
+        // with manual days (created on the web) is view-only here so editing it
+        // can't silently convert those days to per_muscle.
+        if (state.isPerMuscleOnly) {
+            Button(
+                onClick = onEdit,
+                colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark)
+            ) {
+                Text("Edit Routine", color = Color.White, fontFamily = myCustomFont)
+            }
+        } else {
+            Text(
+                text = "This routine has manual days. Edit it on the web app for now.",
+                color = TextGray,
+                fontFamily = myCustomFont
+            )
         }
     }
 }

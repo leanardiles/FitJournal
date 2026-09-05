@@ -205,8 +205,16 @@ class CalendarViewModel(
      * The UI relies on this for inserting muscle-group headers in the table.
      */
     private fun composeStateFrom(bundle: CalendarBundle): CalendarScreenState {
+        // Source the day's exercises from the routine's training-day definition
+        // (its pool for per_muscle, its exact list for manual) rather than by
+        // filtering the whole library by muscle group.
+        val dayExercises = bundle.routine.days
+            .find { it.day_number == bundle.viewingDay }
+            ?.exercises
+            .orEmpty()
+
         val muscleGroupsForDay: List<String> =
-            bundle.routine.routine_days[bundle.viewingDay.toString()].orEmpty()
+            dayExercises.map { it.muscle_group }.distinct()
 
         // Map muscle name → its order index from the routine. Anything not
         // in the routine (defensive: shouldn't happen since we filter exercises
@@ -229,13 +237,12 @@ class CalendarViewModel(
 
         val selectedExerciseIds = bundle.selections.map { it.exercise_id }.toSet()
 
-        val rows: List<CalendarExerciseRow> = bundle.exercises
-            .filter { it.exercise_muscle_group in muscleGroupsForDay }
+        val rows: List<CalendarExerciseRow> = dayExercises
             .map { ex ->
                 CalendarExerciseRow(
                     exerciseId      = ex.exercise_id,
                     exerciseName    = ex.exercise_name,
-                    muscleGroup     = ex.exercise_muscle_group,
+                    muscleGroup     = ex.muscle_group,
                     isSelected      = ex.exercise_id in selectedExerciseIds,
                     logsBySessionId = bundle.sessionsForDay
                         .mapNotNull { session ->

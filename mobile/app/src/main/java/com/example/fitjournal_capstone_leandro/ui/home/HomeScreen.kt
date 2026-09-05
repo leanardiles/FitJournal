@@ -173,8 +173,13 @@ fun CurrentRoutineCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Day rows
-                routine.routine_days.entries.sortedBy { it.key }.forEach { (day, muscles) ->
-                    val isCurrentDay = day.toIntOrNull() == currentDay
+                routine.days.sortedBy { it.day_number }.forEach { dayObj ->
+                    val isCurrentDay = dayObj.day_number == currentDay
+                    val muscles = if (dayObj.day_type == "manual") {
+                        dayObj.exercises.map { it.muscle_group }.distinct()
+                    } else {
+                        dayObj.muscles.map { it.muscle_group }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -190,7 +195,7 @@ fun CurrentRoutineCard(
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = "Day $day: ",
+                            text = "Day ${dayObj.day_number}: ",
                             color = if (isCurrentDay) Color.White else Color.LightGray,
                             fontWeight = if (isCurrentDay) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 14.sp
