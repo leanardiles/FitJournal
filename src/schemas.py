@@ -67,14 +67,12 @@ class ExerciseUpdate(BaseModel):
     exercise_muscle_group: Optional[str] = None
     exercise_user_current_weight: Optional[float] = None
     exercise_link: Optional[str] = None
-    exercise_is_in_routine: Optional[bool] = None
     comments: Optional[str] = None    
 
 class ExerciseResponse(ExerciseBase):
     exercise_id: int
     user_id: int
     exercise_user_current_weight: Optional[float] = None
-    exercise_is_in_routine: bool
     exercise_times_performed: int
     exercise_created_at: datetime
 

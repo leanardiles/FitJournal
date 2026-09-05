@@ -57,8 +57,6 @@ class User(Base):
 
     # Relationships (ADD THE NEW ONES HERE)
     exercises = relationship("Exercise", back_populates="user", cascade="all, delete-orphan")
-    routines = relationship("Routine", back_populates="user", cascade="all, delete-orphan")
-    routine_muscles = relationship("RoutineMusclePerDay", back_populates="user", cascade="all, delete-orphan")
     workout_state = relationship("WorkoutState", back_populates="user", uselist=False, cascade="all, delete-orphan")  # ADD THIS
     workout_logs = relationship("WorkoutLog", back_populates="user", cascade="all, delete-orphan")  # ADD THIS
     training_days = relationship("TrainingDay", back_populates="user", cascade="all, delete-orphan")
@@ -91,7 +89,6 @@ class Exercise(Base):
     exercise_muscle_group = Column(Enum(MuscleGroupEnum), nullable=False)
     exercise_user_current_weight = Column(DECIMAL(5, 2), default=None)
     user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    exercise_is_in_routine = Column(Boolean, default=True)
     exercise_times_performed = Column(Integer, default=0)
     exercise_link = Column(String(500), default=None)
     comments = Column(String(300), default=None)
@@ -105,40 +102,6 @@ class Exercise(Base):
     __table_args__ = (
         CheckConstraint('exercise_user_current_weight >= 0 AND exercise_user_current_weight <= 300', name='check_exercise_weight'),
     )
-
-
-
-class Routine(Base):
-    __tablename__ = "routine_days"
-    
-    routine_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    days_per_week = Column(Integer, CheckConstraint('days_per_week >= 1 AND days_per_week <= 7'), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
-    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
-    
-    # Relationship
-    user = relationship("User", back_populates="routines")
-    
-    # Table constraint
-    __table_args__ = (
-        CheckConstraint('days_per_week >= 1 AND days_per_week <= 7', name='check_days_per_week'),
-    )
-
-
-
-class RoutineMusclePerDay(Base):
-    __tablename__ = "routine_muscles_per_day"
-    
-    routine_day_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    day_number = Column(Integer, nullable=False)  # 1-7
-    muscle_group = Column(Enum(MuscleGroupEnum), nullable=False)  # Use MuscleGroupEnum
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
-    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
-    
-    # Relationship
-    user = relationship("User", back_populates="routine_muscles")
 
 
 
