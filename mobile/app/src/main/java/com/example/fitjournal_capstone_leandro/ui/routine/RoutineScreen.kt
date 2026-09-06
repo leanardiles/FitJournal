@@ -16,7 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
+import androidx.navigation.NavHostController
 import com.example.fitjournal_capstone_leandro.data.model.UserExercise
+import com.example.fitjournal_capstone_leandro.navigation.Routes
 import com.example.fitjournal_capstone_leandro.ui.theme.myCustomFont
 
 private val AccentYellow = Color(0xFFFFEB3B)
@@ -25,7 +28,7 @@ private val SurfaceDark = Color(0xFF2C2C2E)
 private val TextGray = Color(0xFF8E8E93)
 
 @Composable
-fun RoutineScreen(viewModel: RoutineViewModel) {
+fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController) {
     val state by viewModel.state.collectAsState()
 
     Box(
@@ -53,7 +56,7 @@ fun RoutineScreen(viewModel: RoutineViewModel) {
                     muscleGroups = viewModel.muscleGroups,
                     onSelectDays = { viewModel.selectDaysPerWeek(it) },
                     onToggleMuscle = { day, muscle -> viewModel.toggleMuscleGroup(day, muscle) },
-                    onOpenPicker = { day -> viewModel.openExercisePicker(day) },
+                    onOpenPicker = { day -> navController.navigate(Routes.exercisePicker(day)) },
                     onSave = { viewModel.saveRoutine() },
                     onCancel = { viewModel.cancelEditing() }
                 )
@@ -91,18 +94,6 @@ fun RoutineScreen(viewModel: RoutineViewModel) {
             }
         }
 
-        // Exercise picker overlay — shown while a day's picker is open.
-        val pickerDay = state.pickerDay
-        if (pickerDay != null) {
-            ExercisePickerOverlay(
-                day = pickerDay,
-                daySelection = state.editingDays[pickerDay] ?: emptyMap(),
-                exercisesByMuscle = state.exercisesByMuscle,
-                onToggleExercise = { muscle, exId -> viewModel.toggleExercise(pickerDay, muscle, exId) },
-                onChangeCount = { muscle, delta -> viewModel.changeCount(pickerDay, muscle, delta) },
-                onDone = { viewModel.closeExercisePicker() }
-            )
-        }
     }
 }
 
@@ -321,14 +312,20 @@ private fun ViewRoutineContent(
 // ─── EXERCISE PICKER OVERLAY ──────────────────────────────────────────────────
 
 @Composable
-private fun ExercisePickerOverlay(
+fun ExercisePickerScreen(
+    viewModel: RoutineViewModel,
     day: Int,
-    daySelection: Map<String, MuscleSelection>,
-    exercisesByMuscle: Map<String, List<UserExercise>>,
-    onToggleExercise: (String, Int) -> Unit,
-    onChangeCount: (String, Int) -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onCancel: () -> Unit
 ) {
+    val state by viewModel.state.collectAsState()
+    val daySelection = state.editingDays[day] ?: emptyMap()
+    val exercisesByMuscle = state.exercisesByMuscle
+
+    // Snapshot on open so Cancel / system-back can revert this picker session.
+    LaunchedEffect(day) { viewModel.beginPickerEdit(day) }
+    BackHandler { onCancel() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -390,7 +387,7 @@ private fun ExercisePickerOverlay(
                                 fontSize = 13.sp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            StepperButton(label = "-") { onChangeCount(muscle, -1) }
+                            StepperButton(label = "-") { viewModel.changeCount(day, muscle, -1) }
                             Text(
                                 text = "${sel.count}",
                                 color = Color.White,
@@ -398,7 +395,7 @@ private fun ExercisePickerOverlay(
                                 fontSize = 16.sp,
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
-                            StepperButton(label = "+") { onChangeCount(muscle, 1) }
+                            StepperButton(label = "+") { viewModel.changeCount(day, muscle, 1) }
                         }
                     }
 
@@ -420,7 +417,7 @@ private fun ExercisePickerOverlay(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onToggleExercise(muscle, ex.exercise_id) }
+                                    .clickable { viewModel.toggleExercise(day, muscle, ex.exercise_id) }
                                     .padding(vertical = 6.dp)
                             ) {
                                 CheckboxBox(checked = checked)
@@ -439,17 +436,23 @@ private fun ExercisePickerOverlay(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
-                onClick = onDone,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "Done",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = myCustomFont
-                )
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Cancel", color = TextGray, fontFamily = myCustomFont)
+                }
+                Button(
+                    onClick = onDone,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Done", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
+                }
             }
         }
     }

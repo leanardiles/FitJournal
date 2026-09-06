@@ -14,9 +14,12 @@ object Routes {
     const val EXERCISES = "exercises"
     const val EXERCISE_DETAILS = "exerciseDetails"
     const val ROUTINE = "routine"
+    const val EXERCISE_PICKER = "exercise_picker/{day}"
     const val WORKOUT = "workout"
     const val SETTINGS = "settings"
     const val PROFILE = "profile"
     const val TIMER = "timer"
     const val ACCOUNT = "account"
+
+    fun exercisePicker(day: Int) = "exercise_picker/$day"
 }

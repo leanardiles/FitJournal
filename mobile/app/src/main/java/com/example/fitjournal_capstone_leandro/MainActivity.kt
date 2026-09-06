@@ -175,7 +175,7 @@ class MainActivity : ComponentActivity() {
                         // Hide top bar entirely on login screen
                         if (currentRoute != Routes.LOGIN) {
                             // Show back button on all screens except main tabs
-                            val showBackButton = currentRoute !in listOf(Routes.HOME, Routes.CALENDAR, Routes.EXERCISES)
+                            val showBackButton = currentRoute !in listOf(Routes.HOME, Routes.CALENDAR, Routes.EXERCISES, Routes.EXERCISE_PICKER)
 
                             ProfileTopBar(
                                 userName = userProfile?.user_first_name ?: "User",

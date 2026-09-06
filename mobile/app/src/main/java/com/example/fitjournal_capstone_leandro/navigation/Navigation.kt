@@ -17,8 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.fitjournal_capstone_leandro.data.local.TokenManager
 import com.example.fitjournal_capstone_leandro.ui.auth.AuthViewModel
 import com.example.fitjournal_capstone_leandro.ui.auth.LoginScreen
@@ -33,6 +35,7 @@ import com.example.fitjournal_capstone_leandro.ui.home.HomeScreen
 import com.example.fitjournal_capstone_leandro.ui.home.HomeViewModel
 import com.example.fitjournal_capstone_leandro.ui.profile.ProfileSettingsScreen
 import com.example.fitjournal_capstone_leandro.ui.profile.ProfileSettingsViewModel
+import com.example.fitjournal_capstone_leandro.ui.routine.ExercisePickerScreen
 import com.example.fitjournal_capstone_leandro.ui.routine.RoutineScreen
 import com.example.fitjournal_capstone_leandro.ui.routine.RoutineViewModel
 import com.example.fitjournal_capstone_leandro.ui.workout.WorkoutViewModel
@@ -101,7 +104,24 @@ fun AppNavigation(
 
         // Routine
         composable(Routes.ROUTINE) {
-            RoutineScreen(viewModel = routineViewModel)
+            RoutineScreen(viewModel = routineViewModel, navController = navController)
+        }
+
+        // Exercise picker (opened from the routine editor for a given day)
+        composable(
+            route = Routes.EXERCISE_PICKER,
+            arguments = listOf(navArgument("day") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val day = backStackEntry.arguments?.getInt("day") ?: 1
+            ExercisePickerScreen(
+                viewModel = routineViewModel,
+                day = day,
+                onDone = { navController.popBackStack() },
+                onCancel = {
+                    routineViewModel.revertPickerEdit(day)
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(Routes.PROFILE_SETTINGS) {

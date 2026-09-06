@@ -37,7 +37,6 @@ data class RoutineScreenState(
     val routineDays: Map<String, List<String>> = emptyMap(),    // existing routine (view mode display)
     val editingDays: Map<Int, Map<String, MuscleSelection>> = emptyMap(),  // day -> muscle -> selection
     val exercisesByMuscle: Map<String, List<UserExercise>> = emptyMap(),   // library, for the picker
-    val pickerDay: Int? = null,                                 // which day's exercise picker is open
     val isPerMuscleOnly: Boolean = true,                        // false if any day is manual (web-made)
     val savedMessage: String? = null
 )
@@ -51,6 +50,9 @@ class RoutineViewModel(
 
     // Raw routine days from the last load — used to prefill the editor (pool + counts).
     private var rawDays: List<TrainingDayResponse> = emptyList()
+
+    // A day's selection snapshot taken when its picker opens, so Cancel / back can revert.
+    private var pickerSnapshot: Pair<Int, Map<String, MuscleSelection>>? = null
 
     val muscleGroups = listOf(
         "Legs", "Shoulders", "Chest", "Glutes",
@@ -140,14 +142,21 @@ class RoutineViewModel(
         _state.value = _state.value.copy(editingDays = current)
     }
 
-    // ---- Exercise picker ----
+    // ---- Exercise picker edits ----
 
-    fun openExercisePicker(day: Int) {
-        _state.value = _state.value.copy(pickerDay = day)
+    /** Snapshot the day's current selection when its picker opens. */
+    fun beginPickerEdit(day: Int) {
+        pickerSnapshot = day to (_state.value.editingDays[day] ?: emptyMap())
     }
 
-    fun closeExercisePicker() {
-        _state.value = _state.value.copy(pickerDay = null)
+    /** Restore the snapshot taken when the picker opened (Cancel / back). */
+    fun revertPickerEdit(day: Int) {
+        val snap = pickerSnapshot ?: return
+        if (snap.first != day) return
+        val current = _state.value.editingDays.toMutableMap()
+        current[day] = snap.second
+        _state.value = _state.value.copy(editingDays = current)
+        pickerSnapshot = null
     }
 
     fun toggleExercise(day: Int, muscle: String, exerciseId: Int) {
@@ -252,9 +261,9 @@ class RoutineViewModel(
 
     fun cancelEditing() {
         if (_state.value.daysPerWeek > 0) {
-            _state.value = _state.value.copy(uiState = RoutineUiState.Success, pickerDay = null)
+            _state.value = _state.value.copy(uiState = RoutineUiState.Success)
         } else {
-            _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine, pickerDay = null)
+            _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine)
         }
     }
 }
