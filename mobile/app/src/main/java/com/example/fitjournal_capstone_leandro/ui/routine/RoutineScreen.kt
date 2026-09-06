@@ -1,5 +1,6 @@
 package com.example.fitjournal_capstone_leandro.ui.routine
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.fitjournal_capstone_leandro.data.model.UserExercise
 import com.example.fitjournal_capstone_leandro.ui.theme.myCustomFont
 
 private val AccentYellow = Color(0xFFFFEB3B)
@@ -51,6 +53,7 @@ fun RoutineScreen(viewModel: RoutineViewModel) {
                     muscleGroups = viewModel.muscleGroups,
                     onSelectDays = { viewModel.selectDaysPerWeek(it) },
                     onToggleMuscle = { day, muscle -> viewModel.toggleMuscleGroup(day, muscle) },
+                    onOpenPicker = { day -> viewModel.openExercisePicker(day) },
                     onSave = { viewModel.saveRoutine() },
                     onCancel = { viewModel.cancelEditing() }
                 )
@@ -86,6 +89,19 @@ fun RoutineScreen(viewModel: RoutineViewModel) {
                     }
                 }
             }
+        }
+
+        // Exercise picker overlay — shown while a day's picker is open.
+        val pickerDay = state.pickerDay
+        if (pickerDay != null) {
+            ExercisePickerOverlay(
+                day = pickerDay,
+                daySelection = state.editingDays[pickerDay] ?: emptyMap(),
+                exercisesByMuscle = state.exercisesByMuscle,
+                onToggleExercise = { muscle, exId -> viewModel.toggleExercise(pickerDay, muscle, exId) },
+                onChangeCount = { muscle, delta -> viewModel.changeCount(pickerDay, muscle, delta) },
+                onDone = { viewModel.closeExercisePicker() }
+            )
         }
     }
 }
@@ -132,6 +148,7 @@ private fun EditingContent(
     muscleGroups: List<String>,
     onSelectDays: (Int) -> Unit,
     onToggleMuscle: (Int, String) -> Unit,
+    onOpenPicker: (Int) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -184,8 +201,9 @@ private fun EditingContent(
             DayCard(
                 day = day,
                 muscleGroups = muscleGroups,
-                selectedMuscles = state.editingDays[day] ?: emptyList(),
-                onToggleMuscle = { muscle -> onToggleMuscle(day, muscle) }
+                daySelection = state.editingDays[day] ?: emptyMap(),
+                onToggleMuscle = { muscle -> onToggleMuscle(day, muscle) },
+                onOpenPicker = { onOpenPicker(day) }
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -300,6 +318,143 @@ private fun ViewRoutineContent(
     }
 }
 
+// ─── EXERCISE PICKER OVERLAY ──────────────────────────────────────────────────
+
+@Composable
+private fun ExercisePickerOverlay(
+    day: Int,
+    daySelection: Map<String, MuscleSelection>,
+    exercisesByMuscle: Map<String, List<UserExercise>>,
+    onToggleExercise: (String, Int) -> Unit,
+    onChangeCount: (String, Int) -> Unit,
+    onDone: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundDark)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Day $day — choose exercises",
+                fontSize = 24.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontFamily = myCustomFont
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tick the exercises to include, and set how many to draw each session.",
+                fontSize = 13.sp,
+                color = TextGray,
+                fontFamily = myCustomFont
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                if (daySelection.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No muscle groups selected for this day yet.",
+                            color = TextGray,
+                            fontFamily = myCustomFont,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+                daySelection.forEach { (muscle, sel) ->
+                    item(key = "hdr_$muscle") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 14.dp, bottom = 4.dp)
+                        ) {
+                            Text(
+                                text = muscle,
+                                fontSize = 16.sp,
+                                color = AccentYellow,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = myCustomFont,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "draw",
+                                color = TextGray,
+                                fontFamily = myCustomFont,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StepperButton(label = "-") { onChangeCount(muscle, -1) }
+                            Text(
+                                text = "${sel.count}",
+                                color = Color.White,
+                                fontFamily = myCustomFont,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                            StepperButton(label = "+") { onChangeCount(muscle, 1) }
+                        }
+                    }
+
+                    val exercises = exercisesByMuscle[muscle].orEmpty()
+                    if (exercises.isEmpty()) {
+                        item(key = "empty_$muscle") {
+                            Text(
+                                text = "No $muscle exercises in your library.",
+                                color = TextGray,
+                                fontFamily = myCustomFont,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                    } else {
+                        items(exercises, key = { "ex_${muscle}_${it.exercise_id}" }) { ex ->
+                            val checked = sel.exerciseIds.contains(ex.exercise_id)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onToggleExercise(muscle, ex.exercise_id) }
+                                    .padding(vertical = 6.dp)
+                            ) {
+                                CheckboxBox(checked = checked)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = ex.exercise_name,
+                                    color = Color.White,
+                                    fontFamily = myCustomFont,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onDone,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Done",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = myCustomFont
+                )
+            }
+        }
+    }
+}
+
 // ─── SHARED COMPOSABLES ───────────────────────────────────────────────────────
 
 @Composable
@@ -341,8 +496,9 @@ private fun DaySelector(selectedDays: Int, onSelectDays: (Int) -> Unit) {
 private fun DayCard(
     day: Int,
     muscleGroups: List<String>,
-    selectedMuscles: List<String>,
-    onToggleMuscle: (String) -> Unit
+    daySelection: Map<String, MuscleSelection>,
+    onToggleMuscle: (String) -> Unit,
+    onOpenPicker: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -368,7 +524,7 @@ private fun DayCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 rowMuscles.forEach { muscle ->
-                    val isSelected = selectedMuscles.contains(muscle)
+                    val isSelected = daySelection.containsKey(muscle)
                     OutlinedButton(
                         onClick = { onToggleMuscle(muscle) },
                         modifier = Modifier
@@ -378,7 +534,7 @@ private fun DayCard(
                             containerColor = if (isSelected) AccentYellow.copy(alpha = 0.2f)
                             else Color.Transparent
                         ),
-                        border = androidx.compose.foundation.BorderStroke(
+                        border = BorderStroke(
                             width = 1.5.dp,
                             color = if (isSelected) AccentYellow else Color.Gray
                         ),
@@ -400,15 +556,56 @@ private fun DayCard(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Selected summary
-        if (selectedMuscles.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
+        // Choose-exercises — a plain left-aligned text link (secondary action,
+        // deliberately quieter than the muscle toggle pills above).
+        if (daySelection.isNotEmpty()) {
+            val totalSelected = daySelection.values.sumOf { it.exerciseIds.size }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Selected: ${selectedMuscles.joinToString(", ")}",
-                fontSize = 12.sp,
-                color = TextGray,
-                fontFamily = myCustomFont
+                text = "Choose exercises ($totalSelected selected) ›",
+                color = AccentYellow,
+                fontFamily = myCustomFont,
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenPicker() }
+                    .padding(vertical = 4.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Color.White, fontFamily = myCustomFont, fontSize = 18.sp)
+    }
+}
+
+@Composable
+private fun CheckboxBox(checked: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .border(
+                width = 1.5.dp,
+                color = if (checked) AccentYellow else Color.Gray,
+                shape = RoundedCornerShape(4.dp)
+            )
+            .background(
+                color = if (checked) AccentYellow else Color.Transparent,
+                shape = RoundedCornerShape(4.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            Text("✓", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

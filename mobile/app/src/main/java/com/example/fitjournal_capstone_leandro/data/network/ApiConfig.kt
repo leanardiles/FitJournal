@@ -14,7 +14,7 @@ object ApiConfig {
      * true  = Use local FastAPI backend (for development)
      * false = Use production backend (after deployment)
      */
-    const val IS_DEVELOPMENT = false
+    const val IS_DEVELOPMENT = true
 
     /**
      * Physical device local IP

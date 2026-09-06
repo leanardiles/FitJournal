@@ -4,9 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.fitjournal_capstone_leandro.analytics.AnalyticsLogger
+import com.example.fitjournal_capstone_leandro.data.model.MusclePool
 import com.example.fitjournal_capstone_leandro.data.model.TrainingDayResponse
+import com.example.fitjournal_capstone_leandro.data.model.UserExercise
 import com.example.fitjournal_capstone_leandro.data.repository.IUserRoutineRepository
-import com.example.fitjournal_capstone_leandro.data.repository.UserRoutineRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,13 +21,24 @@ sealed class RoutineUiState {
     data class Error(val message: String) : RoutineUiState()
 }
 
+/**
+ * A muscle's selection within a day being edited: which exercises are in the
+ * pool, and how many to draw per session.
+ */
+data class MuscleSelection(
+    val exerciseIds: Set<Int> = emptySet(),
+    val count: Int = 3
+)
+
 data class RoutineScreenState(
     val uiState: RoutineUiState = RoutineUiState.Loading,
     val daysPerWeek: Int = 0,
-    val selectedDays: Int = 0,               // days selected in editor
-    val routineDays: Map<String, List<String>> = emptyMap(),  // existing routine from backend
-    val editingDays: Map<Int, List<String>> = emptyMap(),     // being built in editor
-    val isPerMuscleOnly: Boolean = true,     // false if any day is manual (web-made) -> not editable on mobile yet
+    val selectedDays: Int = 0,                                   // days selected in editor
+    val routineDays: Map<String, List<String>> = emptyMap(),    // existing routine (view mode display)
+    val editingDays: Map<Int, Map<String, MuscleSelection>> = emptyMap(),  // day -> muscle -> selection
+    val exercisesByMuscle: Map<String, List<UserExercise>> = emptyMap(),   // library, for the picker
+    val pickerDay: Int? = null,                                 // which day's exercise picker is open
+    val isPerMuscleOnly: Boolean = true,                        // false if any day is manual (web-made)
     val savedMessage: String? = null
 )
 
@@ -37,6 +49,9 @@ class RoutineViewModel(
     private val _state = MutableStateFlow(RoutineScreenState())
     val state: StateFlow<RoutineScreenState> = _state.asStateFlow()
 
+    // Raw routine days from the last load — used to prefill the editor (pool + counts).
+    private var rawDays: List<TrainingDayResponse> = emptyList()
+
     val muscleGroups = listOf(
         "Legs", "Shoulders", "Chest", "Glutes",
         "Biceps", "Triceps", "Back", "Calves", "Abs"
@@ -46,20 +61,24 @@ class RoutineViewModel(
         loadRoutine()
     }
 
-    /**
-     * Load existing routine from backend
-     */
     fun loadRoutine() {
         viewModelScope.launch {
             _state.value = _state.value.copy(uiState = RoutineUiState.Loading)
+
+            // Library for the exercise picker (grouped by muscle).
+            val exByMuscle = repository.getExercises().getOrNull().orEmpty()
+                .groupBy { it.exercise_muscle_group }
+
             val result = repository.getRoutine()
             if (result.isSuccess) {
                 val routine = result.getOrNull()!!
+                rawDays = routine.days
                 if (routine.days_per_week == 0 || routine.days.isEmpty()) {
-                    _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine)
+                    _state.value = _state.value.copy(
+                        uiState = RoutineUiState.NoRoutine,
+                        exercisesByMuscle = exByMuscle
+                    )
                 } else {
-                    // Flatten the training-day response into the muscle-per-day map
-                    // the editor/display already work with.
                     val displayMap = routine.days
                         .sortedBy { it.day_number }
                         .associate { it.day_number.toString() to musclesForDisplay(it) }
@@ -67,6 +86,7 @@ class RoutineViewModel(
                         uiState = RoutineUiState.Success,
                         daysPerWeek = routine.days_per_week,
                         routineDays = displayMap,
+                        exercisesByMuscle = exByMuscle,
                         isPerMuscleOnly = routine.days.all { it.day_type == "per_muscle" }
                     )
                 }
@@ -80,11 +100,6 @@ class RoutineViewModel(
         }
     }
 
-    /**
-     * The muscle groups to show for a day. per_muscle days list their
-     * chosen muscles directly; manual days (web-made) fall back to the
-     * distinct muscles of their exercises so they still display sensibly.
-     */
     private fun musclesForDisplay(day: TrainingDayResponse): List<String> =
         if (day.day_type == "manual") {
             day.exercises.map { it.muscle_group }.distinct()
@@ -93,10 +108,12 @@ class RoutineViewModel(
         }
 
     /**
-     * User selected number of training days — move to editing mode
+     * User selected number of training days — move to editing mode.
+     * Existing days' content is preserved when the count changes.
      */
     fun selectDaysPerWeek(days: Int) {
-        val editing = (1..days).associateWith { emptyList<String>() }
+        val existing = _state.value.editingDays
+        val editing = (1..days).associateWith { existing[it] ?: emptyMap() }
         _state.value = _state.value.copy(
             uiState = RoutineUiState.Editing,
             selectedDays = days,
@@ -105,40 +122,101 @@ class RoutineViewModel(
     }
 
     /**
-     * Toggle a muscle group for a specific day
+     * Toggle a muscle group for a day. Selecting a muscle defaults its pool to
+     * ALL of that muscle's exercises (curate by unchecking in the picker).
      */
     fun toggleMuscleGroup(day: Int, muscle: String) {
         val current = _state.value.editingDays.toMutableMap()
-        val dayMuscles = current[day]?.toMutableList() ?: mutableListOf()
-        if (dayMuscles.contains(muscle)) {
-            dayMuscles.remove(muscle)
+        val dayMap = (current[day] ?: emptyMap()).toMutableMap()
+        if (dayMap.containsKey(muscle)) {
+            dayMap.remove(muscle)
         } else {
-            dayMuscles.add(muscle)
+            val allIds = _state.value.exercisesByMuscle[muscle].orEmpty()
+                .map { it.exercise_id }.toSet()
+            val count = if (allIds.isEmpty()) 1 else minOf(3, allIds.size)
+            dayMap[muscle] = MuscleSelection(exerciseIds = allIds, count = count)
         }
-        current[day] = dayMuscles
+        current[day] = dayMap
         _state.value = _state.value.copy(editingDays = current)
     }
 
-    /**
-     * Save routine to backend
-     */
+    // ---- Exercise picker ----
+
+    fun openExercisePicker(day: Int) {
+        _state.value = _state.value.copy(pickerDay = day)
+    }
+
+    fun closeExercisePicker() {
+        _state.value = _state.value.copy(pickerDay = null)
+    }
+
+    fun toggleExercise(day: Int, muscle: String, exerciseId: Int) {
+        val current = _state.value.editingDays.toMutableMap()
+        val dayMap = (current[day] ?: return).toMutableMap()
+        val sel = dayMap[muscle] ?: return
+        val ids = sel.exerciseIds.toMutableSet()
+        if (ids.contains(exerciseId)) ids.remove(exerciseId) else ids.add(exerciseId)
+        // Keep count within the new pool size (cap at selected, floor 1).
+        val newCount = if (ids.isEmpty()) 1 else minOf(sel.count, ids.size).coerceAtLeast(1)
+        dayMap[muscle] = sel.copy(exerciseIds = ids, count = newCount)
+        current[day] = dayMap
+        _state.value = _state.value.copy(editingDays = current)
+    }
+
+    /** Nudge a muscle's per-session count by delta, clamped to [1, poolSize]. */
+    fun changeCount(day: Int, muscle: String, delta: Int) {
+        val current = _state.value.editingDays.toMutableMap()
+        val dayMap = (current[day] ?: return).toMutableMap()
+        val sel = dayMap[muscle] ?: return
+        val maxCount = maxOf(1, sel.exerciseIds.size)
+        val newCount = (sel.count + delta).coerceIn(1, maxCount)
+        dayMap[muscle] = sel.copy(count = newCount)
+        current[day] = dayMap
+        _state.value = _state.value.copy(editingDays = current)
+    }
+
     fun saveRoutine() {
         viewModelScope.launch {
-            val days = _state.value.selectedDays
             val editingDays = _state.value.editingDays
 
-            // Validate at least one day has a muscle group
-            val hasSelection = editingDays.values.any { it.isNotEmpty() }
-            if (!hasSelection) {
+            if (editingDays.values.all { it.isEmpty() }) {
                 _state.value = _state.value.copy(
                     uiState = RoutineUiState.Error("Please select at least one muscle group")
                 )
                 return@launch
             }
 
-            val result = repository.saveRoutine(days, editingDays)
+            // Every day needs >=1 muscle, and every muscle needs >=1 exercise in its pool.
+            for ((day, muscleMap) in editingDays.toSortedMap()) {
+                if (muscleMap.isEmpty()) {
+                    _state.value = _state.value.copy(
+                        uiState = RoutineUiState.Error("Day $day needs at least one muscle group")
+                    )
+                    return@launch
+                }
+                for ((muscle, sel) in muscleMap) {
+                    if (sel.exerciseIds.isEmpty()) {
+                        _state.value = _state.value.copy(
+                            uiState = RoutineUiState.Error("Day $day: pick at least one $muscle exercise")
+                        )
+                        return@launch
+                    }
+                }
+            }
+
+            val days: Map<Int, List<MusclePool>> = editingDays.mapValues { (_, muscleMap) ->
+                muscleMap.map { (muscle, sel) ->
+                    MusclePool(
+                        muscle_group = muscle,
+                        exercise_ids = sel.exerciseIds.toList(),
+                        exercise_count = sel.count
+                    )
+                }
+            }
+
+            val result = repository.saveRoutine(days)
             if (result.isSuccess) {
-                AnalyticsLogger.logRoutineSaved(days)
+                AnalyticsLogger.logRoutineSaved(_state.value.selectedDays)
                 loadRoutine()
             } else {
                 _state.value = _state.value.copy(
@@ -151,30 +229,32 @@ class RoutineViewModel(
     }
 
     /**
-     * Switch back to editing mode from view mode
+     * Switch to editing an existing routine — prefill each day's muscles with
+     * their saved pool (checked exercises) and per-muscle count.
      */
     fun startEditing() {
-        // Pre-populate editor with existing routine
-        val existing = _state.value.routineDays
-        val days = _state.value.daysPerWeek
-        val editing = (1..days).associateWith { day ->
-            existing[day.toString()] ?: emptyList()
+        val editing = rawDays.sortedBy { it.day_number }.associate { day ->
+            val muscleMap = day.muscles.associate { m ->
+                val ids = day.exercises
+                    .filter { it.muscle_group == m.muscle_group }
+                    .map { it.exercise_id }
+                    .toSet()
+                m.muscle_group to MuscleSelection(exerciseIds = ids, count = m.exercise_count)
+            }
+            day.day_number to muscleMap
         }
         _state.value = _state.value.copy(
             uiState = RoutineUiState.Editing,
-            selectedDays = days,
+            selectedDays = _state.value.daysPerWeek,
             editingDays = editing
         )
     }
 
-    /**
-     * Cancel editing — go back to view if routine exists, NoRoutine if not
-     */
     fun cancelEditing() {
         if (_state.value.daysPerWeek > 0) {
-            _state.value = _state.value.copy(uiState = RoutineUiState.Success)
+            _state.value = _state.value.copy(uiState = RoutineUiState.Success, pickerDay = null)
         } else {
-            _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine)
+            _state.value = _state.value.copy(uiState = RoutineUiState.NoRoutine, pickerDay = null)
         }
     }
 }
