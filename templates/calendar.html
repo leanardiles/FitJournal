@@ -279,7 +279,6 @@
 
             // Exercises in routine
             allExercises = await getUserExercises();
-            allExercises = allExercises.filter(ex => ex.exercise_is_in_routine);
 
             // Last 10 workout sessions
             workoutSessions = await getWorkoutSessions(userId, columnsToShow);
@@ -364,13 +363,56 @@
         return (userRoutine.days || []).find(d => d.day_number === dayNumber);
     }
 
-    // A day's exercises as full library objects, in the routine's stored order
-    function getDayExerciseObjects(dayNumber) {
+    // The muscle groups a day trains (its pool muscles for per_muscle, or the
+    // distinct muscles of its exercises for manual).
+    function getDayMuscles(dayNumber) {
         const day = getDayObj(dayNumber);
         if (!day) return [];
-        return (day.exercises || [])
-            .map(e => allExercises.find(ex => ex.exercise_id === e.exercise_id))
-            .filter(Boolean);
+        if (day.day_type === 'manual') {
+            const seen = [];
+            (day.exercises || []).forEach(e => { if (!seen.includes(e.muscle_group)) seen.push(e.muscle_group); });
+            return seen;
+        }
+        return (day.muscles || []).map(m => m.muscle_group);
+    }
+
+    // A day's pool exercises (from the routine), normalized + flagged.
+    // selectable = it's a per_muscle pool exercise (togglable for next session);
+    // manual-day exercises are inPool but locked (not selectable).
+    function getDayPoolExercises(dayNumber) {
+        const day = getDayObj(dayNumber);
+        if (!day) return [];
+        const perMuscle = day.day_type !== 'manual';
+        return (day.exercises || []).map(e => ({
+            exercise_id: e.exercise_id,
+            exercise_name: e.exercise_name,
+            exercise_muscle_group: e.muscle_group,
+            inPool: true,
+            selectable: perMuscle,
+        }));
+    }
+
+    // Rows to show under a day: its pool PLUS any logged exercise whose muscle
+    // is one the day trains (so manual / off-routine logs surface under the
+    // right day by muscle). Logged-only rows are history: inPool/selectable false.
+    function getRowsForDay(dayNumber) {
+        const byId = new Map();
+        getDayPoolExercises(dayNumber).forEach(ex => byId.set(ex.exercise_id, ex));
+
+        const dayMuscles = new Set(getDayMuscles(dayNumber));
+        new Set(workoutLogs.map(l => l.exercise_id)).forEach(id => {
+            if (byId.has(id)) return;
+            const lib = allExercises.find(ex => ex.exercise_id === id);
+            if (!lib || !dayMuscles.has(lib.exercise_muscle_group)) return;
+            byId.set(id, {
+                exercise_id: lib.exercise_id,
+                exercise_name: lib.exercise_name,
+                exercise_muscle_group: lib.exercise_muscle_group,
+                inPool: false,
+                selectable: false,
+            });
+        });
+        return Array.from(byId.values());
     }
 
     // Label for a day: its name if set, otherwise its distinct muscle groups
@@ -396,19 +438,23 @@
         }
     }
     function getFilteredExercises() {
-        const activeDays = getActiveDays();
-        const seen = new Set();
-        const result = [];
-        activeDays.forEach(d => {
-            getDayExerciseObjects(d).forEach(ex => {
-                if (!seen.has(ex.exercise_id)) { seen.add(ex.exercise_id); result.push(ex); }
+        const byId = new Map();
+        getActiveDays().forEach(d => {
+            getRowsForDay(d).forEach(ex => {
+                const cur = byId.get(ex.exercise_id);
+                if (!cur) { byId.set(ex.exercise_id, { ...ex }); }
+                else { cur.inPool = cur.inPool || ex.inPool; cur.selectable = cur.selectable || ex.selectable; }
             });
         });
-        return result;
+        return Array.from(byId.values());
     }
-    function getFilteredSessions() {
-        const activeDays = getActiveDays();
-        return workoutSessions.filter(s => activeDays.includes(s.routine_day_number));
+    // Columns are the sessions that actually logged one of the visible rows.
+    // This is what lets manual (day-less) sessions appear under the days whose
+    // muscles they trained, instead of being dropped by routine_day_number.
+    function getFilteredSessions(rowIds) {
+        return workoutSessions.filter(s =>
+            workoutLogs.some(l => l.session_id === s.session_id && rowIds.has(l.exercise_id))
+        );
     }
 
     function buildCalendarTable() {
@@ -418,8 +464,9 @@
         updateViewInfo();
 
         const filteredExercises = getFilteredExercises();
-        const filteredSessions = getFilteredSessions();
-        filteredSessions.sort((a, b) => new Date(b.workout_date) - new Date(a.workout_date));
+        const rowIds = new Set(filteredExercises.map(ex => ex.exercise_id));
+        const filteredSessions = getFilteredSessions(rowIds);
+        filteredSessions.sort((a, b) => parseLocalDate(b.workout_date) - parseLocalDate(a.workout_date));
 
         // Headers
         headerRow.innerHTML = '';
@@ -437,7 +484,7 @@
             const th = document.createElement('th');
             if (i < filteredSessions.length) {
                 const session = filteredSessions[i];
-                const date = new Date(session.workout_date);
+                const date = parseLocalDate(session.workout_date);
                 th.innerHTML = `
                     <div class="nb-wod-day">${getDayName(date)}</div>
                     <div class="nb-wod-date">${formatDateShort(date)}</div>
@@ -459,7 +506,7 @@
         tbody.innerHTML = '';
 
         // Helper: render a single exercise row (uses outer scope's filteredSessions, workoutLogs, nextWorkoutSelections)
-        function renderExerciseRow(ex, isManual = false) {
+        function renderExerciseRow(ex) {
             const row = document.createElement('tr');
 
             // Exercise name
@@ -468,16 +515,12 @@
             nameCell.textContent = ex.exercise_name;
             row.appendChild(nameCell);
 
-            // Next workout cell: toggle for per_muscle days, a fixed lock for manual days
+            // Select cell: toggle for per_muscle pool exercises (selectable for
+            // the next session), a lock for manual-day exercises (fixed), and
+            // nothing for off-routine history rows (logged but not in any pool).
             const nextCell = document.createElement('td');
             nextCell.className = 'center';
-            if (isManual) {
-                const lock = document.createElement('span');
-                lock.className = 'nb-cal-lock';
-                lock.title = 'Manual day — exercises are fixed by your routine';
-                lock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
-                nextCell.appendChild(lock);
-            } else {
+            if (ex.selectable) {
                 const isSelected = !!nextWorkoutSelections[ex.exercise_id];
                 const btn = document.createElement('button');
                 btn.className = 'nb-next-btn' + (isSelected ? ' selected' : '');
@@ -487,7 +530,14 @@
                     await loadCalendar();
                 });
                 nextCell.appendChild(btn);
+            } else if (ex.inPool) {
+                const lock = document.createElement('span');
+                lock.className = 'nb-cal-lock';
+                lock.title = 'Manual day — exercises are fixed by your routine';
+                lock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
+                nextCell.appendChild(lock);
             }
+            // else: off-routine history row — no select control
             row.appendChild(nextCell);
             // WOD cells
             for (let i = 0; i < columnsToShow; i++) {
@@ -529,7 +579,7 @@
 
         // Helper: get exercises for a single day, filtered and sorted
         function getExercisesForDay(dayNumber) {
-            return getDayExerciseObjects(dayNumber)
+            return getRowsForDay(dayNumber)
                 .sort((a, b) => {
                     if (a.exercise_muscle_group !== b.exercise_muscle_group) {
                         return a.exercise_muscle_group.localeCompare(b.exercise_muscle_group);
@@ -562,7 +612,7 @@
                         currentMuscle = ex.exercise_muscle_group;
                         tbody.appendChild(renderSectionHeader(currentMuscle, 'nb-cal-muscle-row'));
                     }
-                    tbody.appendChild(renderExerciseRow(ex, dayIsManual));
+                    tbody.appendChild(renderExerciseRow(ex));
                 });
             });
 
@@ -587,7 +637,7 @@
                         currentMuscle = ex.exercise_muscle_group;
                         tbody.appendChild(renderSectionHeader(currentMuscle, 'nb-cal-muscle-row'));
                     }
-                    tbody.appendChild(renderExerciseRow(ex, singleDayIsManual));
+                    tbody.appendChild(renderExerciseRow(ex));
                 });
             }
         }
@@ -649,6 +699,14 @@
         } catch (err) {
             console.error('Clear error:', err);
         }
+    }
+
+    // Parse a stored YYYY-MM-DD as a LOCAL date. `new Date("2025-09-06")`
+    // parses as midnight UTC, which renders as the previous day in timezones
+    // behind UTC. Building from explicit parts avoids that shift.
+    function parseLocalDate(dateStr) {
+        const [y, m, d] = String(dateStr).split('-').map(Number);
+        return new Date(y, m - 1, d);
     }
 
     function getDayName(date) {

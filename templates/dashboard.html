@@ -143,6 +143,14 @@
 
 {% block extra_js %}
 <script>
+    // Parse a stored YYYY-MM-DD as a LOCAL date. `new Date("2025-09-06")` parses
+    // as midnight UTC, which lands on the previous day in timezones behind UTC
+    // (e.g. US), pushing today's workouts into last week. Build from parts to avoid it.
+    function parseLocalDate(dateStr) {
+        const [y, m, d] = String(dateStr).split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+
     if (requireLogin()) {
         document.addEventListener('DOMContentLoaded', async () => {
             await Promise.all([loadRoutine(), loadStats(), loadMuscleSummary()]);
@@ -162,7 +170,7 @@
             const diff = now.getDate() - day + (day === 0 ? -6 : 1);
             const monday = new Date(now.setDate(diff));
             monday.setHours(0,0,0,0);
-            const thisWeek = sessions.filter(s => new Date(s.workout_date) >= monday).length;
+            const thisWeek = sessions.filter(s => parseLocalDate(s.workout_date) >= monday).length;
             document.getElementById('workouts-this-week').textContent = thisWeek;
         } catch(e) {
             document.getElementById('current-day').textContent = '—';
@@ -269,7 +277,7 @@
 
         const totals = {};
         smLogs.forEach(log => {
-            if (new Date(log.workout_date) < start) return;
+            if (parseLocalDate(log.workout_date) < start) return;
             const muscle = smExMuscle[log.exercise_id];
             if (!muscle) return;   // exercise no longer in the library
             totals[muscle] = (totals[muscle] || 0) + (log.sets_completed || 0);
