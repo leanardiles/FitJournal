@@ -160,7 +160,6 @@
                     <th style="min-width: 200px;">Exercise</th>
                     <th class="center" id="weight-header">Weight (kg)</th>
                     <th class="center">Link</th>
-                    <th class="center">In Routine</th>
                     <th class="center">Delete</th>
                 </tr>
             </thead>
@@ -248,7 +247,7 @@
 <script>
     requireLogin();
 
-    let pendingChanges = { weights: {}, routineToggles: {} };
+    let pendingChanges = { weights: {} };
     let hasUnsavedChanges = false;
     let allExercises = [];
     let currentMuscleGroup = 'Legs';
@@ -306,12 +305,6 @@
                         '<span style="color:var(--muted)">—</span>'}
                 </td>
                 <td class="center">
-                    <input type="checkbox"
-                           class="nb-checkbox include-checkbox"
-                           ${exercise.exercise_is_in_routine ? 'checked' : ''}
-                           data-exercise-id="${exercise.exercise_id}">
-                </td>
-                <td class="center">
                     <span class="nb-delete-btn" 
                         data-exercise-id="${exercise.exercise_id}"
                         data-exercise-name="${exercise.exercise_name}"
@@ -324,12 +317,6 @@
         document.querySelectorAll('.nb-weight-input').forEach(input => {
             input.addEventListener('blur', (e) => {
                 updateExerciseWeight(e.target.dataset.exerciseId, parseFloat(e.target.value) || 0);
-            });
-        });
-
-        document.querySelectorAll('.include-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', (e) => {
-                updateExerciseInclude(e.target.dataset.exerciseId, e.target.checked);
             });
         });
 
@@ -355,14 +342,6 @@
         hasUnsavedChanges = true;
         const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
         if (exercise) exercise.exercise_user_current_weight = weight;
-        updateSaveButton();
-    }
-
-    function updateExerciseInclude(exerciseId, isIncluded) {
-        pendingChanges.routineToggles[exerciseId] = isIncluded;
-        hasUnsavedChanges = true;
-        const exercise = allExercises.find(ex => ex.exercise_id == exerciseId);
-        if (exercise) exercise.exercise_is_in_routine = isIncluded;
         updateSaveButton();
     }
 
@@ -406,13 +385,6 @@
                 exercisesToUpdate.get(exerciseId).exercise_user_current_weight = weight;
             }
 
-            for (const [exerciseId, isInRoutine] of Object.entries(pendingChanges.routineToggles)) {
-                if (!exercisesToUpdate.has(exerciseId)) {
-                    exercisesToUpdate.set(exerciseId, { ...allExercises.find(ex => ex.exercise_id == exerciseId) });
-                }
-                exercisesToUpdate.get(exerciseId).exercise_is_in_routine = isInRoutine;
-            }
-
             for (const [exerciseId, exerciseData] of exercisesToUpdate) {
                 await fetch(`${API_URL}/exercises/${exerciseId}?user_id=${userId}`, {
                     method: 'PUT',
@@ -421,14 +393,13 @@
                         exercise_name: exerciseData.exercise_name,
                         exercise_muscle_group: exerciseData.exercise_muscle_group,
                         exercise_user_current_weight: exerciseData.exercise_user_current_weight,
-                        exercise_is_in_routine: exerciseData.exercise_is_in_routine,
                         exercise_link: exerciseData.exercise_link || null,
                         comments: exerciseData.comments || null
                     })
                 });
             }
 
-            pendingChanges = { weights: {}, routineToggles: {} };
+            pendingChanges = { weights: {} };
             hasUnsavedChanges = false;
             btn.disabled = false;
             btn.classList.add('nb-btn-saved');
@@ -497,7 +468,6 @@
             exercise_user_current_weight: weight,
             exercise_link: link,
             comments: comments,
-            exercise_is_in_routine: true
         });
 
         if (newExercise) {
