@@ -1,12 +1,15 @@
 package com.example.fitjournal_capstone_leandro.ui.routine
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,9 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
 import androidx.navigation.NavHostController
-import com.example.fitjournal_capstone_leandro.data.model.UserExercise
 import com.example.fitjournal_capstone_leandro.navigation.Routes
 import com.example.fitjournal_capstone_leandro.ui.theme.myCustomFont
 
@@ -38,16 +39,11 @@ fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController)
     ) {
         when (state.uiState) {
             is RoutineUiState.Loading -> {
-                CircularProgressIndicator(
-                    color = AccentYellow,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                CircularProgressIndicator(color = AccentYellow, modifier = Modifier.align(Alignment.Center))
             }
 
             is RoutineUiState.NoRoutine -> {
-                NoRoutineContent(
-                    onSelectDays = { viewModel.selectDaysPerWeek(it) }
-                )
+                NoRoutineContent(onSelectDays = { viewModel.selectDaysPerWeek(it) })
             }
 
             is RoutineUiState.Editing -> {
@@ -55,6 +51,7 @@ fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController)
                     state = state,
                     muscleGroups = viewModel.muscleGroups,
                     onSelectDays = { viewModel.selectDaysPerWeek(it) },
+                    onSetType = { day, type -> viewModel.setDayType(day, type) },
                     onToggleMuscle = { day, muscle -> viewModel.toggleMuscleGroup(day, muscle) },
                     onOpenPicker = { day -> navController.navigate(Routes.exercisePicker(day)) },
                     onSave = { viewModel.saveRoutine() },
@@ -63,17 +60,12 @@ fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController)
             }
 
             is RoutineUiState.Success -> {
-                ViewRoutineContent(
-                    state = state,
-                    onEdit = { viewModel.startEditing() }
-                )
+                ViewRoutineContent(state = state, onEdit = { viewModel.startEditing() })
             }
 
             is RoutineUiState.Error -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -84,16 +76,12 @@ fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController)
                         fontSize = 16.sp
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { viewModel.loadRoutine() },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentYellow)
-                    ) {
+                    Button(onClick = { viewModel.loadRoutine() }, colors = ButtonDefaults.buttonColors(containerColor = AccentYellow)) {
                         Text("Retry", color = Color.Black, fontFamily = myCustomFont)
                     }
                 }
             }
         }
-
     }
 }
 
@@ -102,31 +90,17 @@ fun RoutineScreen(viewModel: RoutineViewModel, navController: NavHostController)
 @Composable
 private fun NoRoutineContent(onSelectDays: (Int) -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Your Routine",
-            fontSize = 32.sp,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontFamily = myCustomFont
-        )
-
+        Text("Your Routine", fontSize = 32.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
         Spacer(modifier = Modifier.height(40.dp))
-
         Text(
             text = "How many days per week\ndo you want to train?",
-            fontSize = 20.sp,
-            color = Color.White,
-            fontFamily = myCustomFont,
+            fontSize = 20.sp, color = Color.White, fontFamily = myCustomFont,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-
         Spacer(modifier = Modifier.height(32.dp))
-
         DaySelector(selectedDays = 0, onSelectDays = onSelectDays)
     }
 }
@@ -138,61 +112,37 @@ private fun EditingContent(
     state: RoutineScreenState,
     muscleGroups: List<String>,
     onSelectDays: (Int) -> Unit,
+    onSetType: (Int, String) -> Unit,
     onToggleMuscle: (Int, String) -> Unit,
     onOpenPicker: (Int) -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Text(
-                text = "Your Routine",
-                fontSize = 32.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontFamily = myCustomFont
-            )
-
+            Text("Your Routine", fontSize = 32.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
             Spacer(modifier = Modifier.height(24.dp))
-
             Text(
                 text = "How many days per week\ndo you want to train?",
-                fontSize = 18.sp,
-                color = Color.White,
-                fontFamily = myCustomFont,
+                fontSize = 18.sp, color = Color.White, fontFamily = myCustomFont,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-
             Spacer(modifier = Modifier.height(16.dp))
-
-            DaySelector(
-                selectedDays = state.selectedDays,
-                onSelectDays = onSelectDays
-            )
-
+            DaySelector(selectedDays = state.selectedDays, onSelectDays = onSelectDays)
             Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Select muscle groups for each day:",
-                fontSize = 18.sp,
-                color = Color.White,
-                fontFamily = myCustomFont
-            )
-
+            Text("Set up each day:", fontSize = 18.sp, color = Color.White, fontFamily = myCustomFont)
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // One card per day
         items((1..state.selectedDays).toList()) { day ->
             DayCard(
                 day = day,
+                dayEdit = state.editingDays[day] ?: DayEdit(),
                 muscleGroups = muscleGroups,
-                daySelection = state.editingDays[day] ?: emptyMap(),
+                onSetType = { type -> onSetType(day, type) },
                 onToggleMuscle = { muscle -> onToggleMuscle(day, muscle) },
                 onOpenPicker = { onOpenPicker(day) }
             )
@@ -201,30 +151,14 @@ private fun EditingContent(
 
         item {
             Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                OutlinedButton(
-                    onClick = onCancel,
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.padding(end = 12.dp)) {
                     Text("Cancel", color = TextGray, fontFamily = myCustomFont)
                 }
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentYellow)
-                ) {
-                    Text(
-                        "Save Routine",
-                        color = Color.Black,
-                        fontFamily = myCustomFont,
-                        fontWeight = FontWeight.Bold
-                    )
+                Button(onClick = onSave, colors = ButtonDefaults.buttonColors(containerColor = AccentYellow)) {
+                    Text("Save Routine", color = Color.Black, fontFamily = myCustomFont, fontWeight = FontWeight.Bold)
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -233,201 +167,103 @@ private fun EditingContent(
 // ─── VIEW ROUTINE ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ViewRoutineContent(
-    state: RoutineScreenState,
-    onEdit: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Your Routine",
-            fontSize = 32.sp,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontFamily = myCustomFont
-        )
-
+private fun ViewRoutineContent(state: RoutineScreenState, onEdit: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Your Routine", fontSize = 32.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
         Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Training ${state.daysPerWeek} days per week",
-            fontSize = 16.sp,
-            color = TextGray,
-            fontFamily = myCustomFont
-        )
-
+        Text("Training ${state.daysPerWeek} days per week", fontSize = 16.sp, color = TextGray, fontFamily = myCustomFont)
         Spacer(modifier = Modifier.height(24.dp))
 
         (1..state.daysPerWeek).forEach { day ->
             val muscles = state.routineDays[day.toString()] ?: emptyList()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Text(
-                    text = "Day $day:",
-                    fontSize = 16.sp,
-                    color = AccentYellow,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = myCustomFont,
-                    modifier = Modifier.width(60.dp)
-                )
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
+                Text("Day $day:", fontSize = 16.sp, color = AccentYellow, fontWeight = FontWeight.Bold, fontFamily = myCustomFont, modifier = Modifier.width(60.dp))
                 Text(
                     text = if (muscles.isEmpty()) "Rest day" else muscles.joinToString(", "),
-                    fontSize = 16.sp,
-                    color = Color.White,
-                    fontFamily = myCustomFont
+                    fontSize = 16.sp, color = Color.White, fontFamily = myCustomFont
                 )
             }
             Divider(color = SurfaceDark)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
-
-        // The mobile editor only builds per_muscle routines for now. A routine
-        // with manual days (created on the web) is view-only here so editing it
-        // can't silently convert those days to per_muscle.
-        if (state.isPerMuscleOnly) {
-            Button(
-                onClick = onEdit,
-                colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark)
-            ) {
-                Text("Edit Routine", color = Color.White, fontFamily = myCustomFont)
-            }
-        } else {
-            Text(
-                text = "This routine has manual days. Edit it on the web app for now.",
-                color = TextGray,
-                fontFamily = myCustomFont
-            )
+        Button(onClick = onEdit, colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark)) {
+            Text("Edit Routine", color = Color.White, fontFamily = myCustomFont)
         }
     }
 }
 
-// ─── EXERCISE PICKER OVERLAY ──────────────────────────────────────────────────
+// ─── EXERCISE PICKER ROUTE (branches by day type) ─────────────────────────────
 
 @Composable
-fun ExercisePickerScreen(
+fun RoutineExercisePickerRoute(
     viewModel: RoutineViewModel,
     day: Int,
     onDone: () -> Unit,
     onCancel: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
-    val daySelection = state.editingDays[day] ?: emptyMap()
+    val type = state.editingDays[day]?.type ?: "per_muscle"
+    if (type == "manual") {
+        ManualPickerScreen(viewModel = viewModel, day = day, onDone = onDone, onCancel = onCancel)
+    } else {
+        PerMusclePickerScreen(viewModel = viewModel, day = day, onDone = onDone, onCancel = onCancel)
+    }
+}
+
+// ─── PER-MUSCLE PICKER ────────────────────────────────────────────────────────
+
+@Composable
+private fun PerMusclePickerScreen(
+    viewModel: RoutineViewModel,
+    day: Int,
+    onDone: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    val daySelection = (state.editingDays[day] ?: DayEdit()).perMuscle
     val exercisesByMuscle = state.exercisesByMuscle
 
-    // Snapshot on open so Cancel / system-back can revert this picker session.
     LaunchedEffect(day) { viewModel.beginPickerEdit(day) }
     BackHandler { onCancel() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDark)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = "Day $day — choose exercises",
-                fontSize = 24.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontFamily = myCustomFont
-            )
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Day $day — choose exercises", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Tick the exercises to include, and set how many to draw each session.",
-                fontSize = 13.sp,
-                color = TextGray,
-                fontFamily = myCustomFont
-            )
-
+            Text("Tick the exercises to include, and set how many to draw each session.", fontSize = 13.sp, color = TextGray, fontFamily = myCustomFont)
             Spacer(modifier = Modifier.height(12.dp))
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 if (daySelection.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No muscle groups selected for this day yet.",
-                            color = TextGray,
-                            fontFamily = myCustomFont,
-                            fontSize = 14.sp
-                        )
-                    }
+                    item { Text("No muscle groups selected for this day yet.", color = TextGray, fontFamily = myCustomFont, fontSize = 14.sp) }
                 }
                 daySelection.forEach { (muscle, sel) ->
                     item(key = "hdr_$muscle") {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 14.dp, bottom = 4.dp)
-                        ) {
-                            Text(
-                                text = muscle,
-                                fontSize = 16.sp,
-                                color = AccentYellow,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = myCustomFont,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "draw",
-                                color = TextGray,
-                                fontFamily = myCustomFont,
-                                fontSize = 13.sp
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp)) {
+                            Text(muscle, fontSize = 16.sp, color = AccentYellow, fontWeight = FontWeight.Bold, fontFamily = myCustomFont, modifier = Modifier.weight(1f))
+                            Text("draw", color = TextGray, fontFamily = myCustomFont, fontSize = 13.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             StepperButton(label = "-") { viewModel.changeCount(day, muscle, -1) }
-                            Text(
-                                text = "${sel.count}",
-                                color = Color.White,
-                                fontFamily = myCustomFont,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
+                            Text("${sel.count}", color = Color.White, fontFamily = myCustomFont, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 12.dp))
                             StepperButton(label = "+") { viewModel.changeCount(day, muscle, 1) }
                         }
                     }
-
                     val exercises = exercisesByMuscle[muscle].orEmpty()
                     if (exercises.isEmpty()) {
                         item(key = "empty_$muscle") {
-                            Text(
-                                text = "No $muscle exercises in your library.",
-                                color = TextGray,
-                                fontFamily = myCustomFont,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(vertical = 6.dp)
-                            )
+                            Text("No $muscle exercises in your library.", color = TextGray, fontFamily = myCustomFont, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
                         }
                     } else {
                         items(exercises, key = { "ex_${muscle}_${it.exercise_id}" }) { ex ->
                             val checked = sel.exerciseIds.contains(ex.exercise_id)
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { viewModel.toggleExercise(day, muscle, ex.exercise_id) }
-                                    .padding(vertical = 6.dp)
+                                modifier = Modifier.fillMaxWidth().clickable { viewModel.toggleExercise(day, muscle, ex.exercise_id) }.padding(vertical = 6.dp)
                             ) {
                                 CheckboxBox(checked = checked)
                                 Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = ex.exercise_name,
-                                    color = Color.White,
-                                    fontFamily = myCustomFont,
-                                    fontSize = 14.sp
-                                )
+                                Text(ex.exercise_name, color = Color.White, fontFamily = myCustomFont, fontSize = 14.sp)
                             }
                         }
                     }
@@ -435,25 +271,79 @@ fun ExercisePickerScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            PickerButtons(onCancel = onCancel, onDone = onDone)
+        }
+    }
+}
 
+// ─── MANUAL PICKER ────────────────────────────────────────────────────────────
+
+@Composable
+private fun ManualPickerScreen(
+    viewModel: RoutineViewModel,
+    day: Int,
+    onDone: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    val de = state.editingDays[day] ?: DayEdit()
+    val exercisesByMuscle = state.exercisesByMuscle
+
+    LaunchedEffect(day) { viewModel.beginPickerEdit(day) }
+    BackHandler { onCancel() }
+
+    val muscles = viewModel.muscleGroups.filter { !exercisesByMuscle[it].isNullOrEmpty() }.sorted()
+    val active = de.manualActiveMuscles
+    val checked = de.manualExerciseIds
+
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Day $day — choose exercises", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Tick the exercises to include in this manual day.", fontSize = 13.sp, color = TextGray, fontFamily = myCustomFont)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Muscle tabs — multi-select filter; count badge = checked exercises for that muscle.
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Cancel", color = TextGray, fontFamily = myCustomFont)
-                }
-                Button(
-                    onClick = onDone,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentYellow),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Done", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
+                muscles.forEach { m ->
+                    val n = exercisesByMuscle[m].orEmpty().count { checked.contains(it.exercise_id) }
+                    MuscleTab(label = m, count = n, active = active.contains(m)) { viewModel.toggleManualMuscleTab(day, m) }
                 }
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                if (active.isEmpty()) {
+                    item {
+                        Text("Tap muscle groups above to show their exercises.", color = TextGray, fontFamily = myCustomFont, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    }
+                } else {
+                    muscles.filter { active.contains(it) }.forEach { m ->
+                        item(key = "mhdr_$m") {
+                            Text(m, fontSize = 16.sp, color = AccentYellow, fontWeight = FontWeight.Bold, fontFamily = myCustomFont, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
+                        }
+                        items(exercisesByMuscle[m].orEmpty(), key = { "mex_${m}_${it.exercise_id}" }) { ex ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { viewModel.toggleManualExercise(day, ex.exercise_id) }.padding(vertical = 6.dp)
+                            ) {
+                                CheckboxBox(checked = checked.contains(ex.exercise_id))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(ex.exercise_name, color = Color.White, fontFamily = myCustomFont, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("${checked.size} exercises picked", color = TextGray, fontFamily = myCustomFont, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            PickerButtons(onCancel = onCancel, onDone = onDone)
         }
     }
 }
@@ -461,130 +351,169 @@ fun ExercisePickerScreen(
 // ─── SHARED COMPOSABLES ───────────────────────────────────────────────────────
 
 @Composable
+private fun PickerButtons(onCancel: () -> Unit, onDone: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+            Text("Cancel", color = TextGray, fontFamily = myCustomFont)
+        }
+        Button(onClick = onDone, colors = ButtonDefaults.buttonColors(containerColor = AccentYellow), modifier = Modifier.weight(1f)) {
+            Text("Done", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
+        }
+    }
+}
+
+@Composable
 private fun DaySelector(selectedDays: Int, onSelectDays: (Int) -> Unit) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         (1..7).forEach { day ->
             val isSelected = day == selectedDays
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .border(
-                        width = 2.dp,
-                        color = if (isSelected) AccentYellow else Color.White,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    .background(
-                        color = if (isSelected) AccentYellow.copy(alpha = 0.2f)
-                        else Color.Transparent,
-                        shape = RoundedCornerShape(8.dp)
-                    )
+                    .border(2.dp, if (isSelected) AccentYellow else Color.White, RoundedCornerShape(8.dp))
+                    .background(if (isSelected) AccentYellow.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(8.dp))
                     .clickable { onSelectDays(day) },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "$day",
-                    color = if (isSelected) AccentYellow else Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = myCustomFont,
-                    fontSize = 18.sp
-                )
+                Text("$day", color = if (isSelected) AccentYellow else Color.White, fontWeight = FontWeight.Bold, fontFamily = myCustomFont, fontSize = 18.sp)
             }
         }
+    }
+}
+
+// Text-style type toggle: selected option bold yellow, other muted grey.
+@Composable
+private fun TypeToggle(current: String, onSelect: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Type:", color = TextGray, fontFamily = myCustomFont, fontSize = 14.sp)
+        Spacer(modifier = Modifier.width(8.dp))
+        val byMuscle = current == "per_muscle"
+        Text(
+            text = "By Muscle",
+            color = if (byMuscle) AccentYellow else TextGray,
+            fontWeight = if (byMuscle) FontWeight.Bold else FontWeight.Normal,
+            fontFamily = myCustomFont,
+            fontSize = 16.sp,
+            modifier = Modifier.clickable { if (!byMuscle) onSelect("per_muscle") }.padding(vertical = 4.dp, horizontal = 2.dp)
+        )
+        Text("/", color = Color(0xFF555555), fontFamily = myCustomFont, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        val manual = current == "manual"
+        Text(
+            text = "Manual",
+            color = if (manual) AccentYellow else TextGray,
+            fontWeight = if (manual) FontWeight.Bold else FontWeight.Normal,
+            fontFamily = myCustomFont,
+            fontSize = 16.sp,
+            modifier = Modifier.clickable { if (!manual) onSelect("manual") }.padding(vertical = 4.dp, horizontal = 2.dp)
+        )
     }
 }
 
 @Composable
 private fun DayCard(
     day: Int,
+    dayEdit: DayEdit,
     muscleGroups: List<String>,
-    daySelection: Map<String, MuscleSelection>,
+    onSetType: (String) -> Unit,
     onToggleMuscle: (String) -> Unit,
     onOpenPicker: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(SurfaceDark, RoundedCornerShape(12.dp))
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Day $day",
-            fontSize = 18.sp,
-            color = AccentYellow,
-            fontWeight = FontWeight.Bold,
-            fontFamily = myCustomFont
-        )
+    var pendingType by remember { mutableStateOf<String?>(null) }
+
+    Column(modifier = Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(12.dp)).padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("Day $day", fontSize = 18.sp, color = AccentYellow, fontWeight = FontWeight.Bold, fontFamily = myCustomFont)
+            TypeToggle(current = dayEdit.type) { newType ->
+                val hasContent = dayEdit.perMuscle.isNotEmpty() || dayEdit.manualExerciseIds.isNotEmpty()
+                if (hasContent) pendingType = newType else onSetType(newType)
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Muscle group toggle buttons — wrap in rows of 3
-        val rows = muscleGroups.chunked(3)
-        rows.forEach { rowMuscles ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                rowMuscles.forEach { muscle ->
-                    val isSelected = daySelection.containsKey(muscle)
-                    OutlinedButton(
-                        onClick = { onToggleMuscle(muscle) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (isSelected) AccentYellow.copy(alpha = 0.2f)
-                            else Color.Transparent
-                        ),
-                        border = BorderStroke(
-                            width = 1.5.dp,
-                            color = if (isSelected) AccentYellow else Color.Gray
-                        ),
-                        contentPadding = PaddingValues(4.dp)
-                    ) {
-                        Text(
-                            text = muscle,
-                            color = if (isSelected) AccentYellow else Color.White,
-                            fontFamily = myCustomFont,
-                            fontSize = 11.sp
-                        )
+        if (dayEdit.type == "manual") {
+            val n = dayEdit.manualExerciseIds.size
+            Text(
+                text = "Choose exercises ($n) ›",
+                color = AccentYellow, fontFamily = myCustomFont, fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth().clickable { onOpenPicker() }.padding(vertical = 4.dp)
+            )
+        } else {
+            val rows = muscleGroups.sorted().chunked(3)
+            rows.forEach { rowMuscles ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowMuscles.forEach { muscle ->
+                        val isSelected = dayEdit.perMuscle.containsKey(muscle)
+                        OutlinedButton(
+                            onClick = { onToggleMuscle(muscle) },
+                            modifier = Modifier.weight(1f).height(40.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = if (isSelected) AccentYellow.copy(alpha = 0.2f) else Color.Transparent),
+                            border = BorderStroke(1.5.dp, if (isSelected) AccentYellow else Color.Gray),
+                            contentPadding = PaddingValues(4.dp)
+                        ) {
+                            Text(muscle, color = if (isSelected) AccentYellow else Color.White, fontFamily = myCustomFont, fontSize = 11.sp)
+                        }
                     }
+                    repeat(3 - rowMuscles.size) { Spacer(modifier = Modifier.weight(1f)) }
                 }
-                // Fill empty slots in last row
-                repeat(3 - rowMuscles.size) {
-                    Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (dayEdit.perMuscle.isNotEmpty()) {
+                val n = dayEdit.perMuscle.values.sumOf { it.exerciseIds.size }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Choose exercises ($n) ›",
+                    color = AccentYellow, fontFamily = myCustomFont, fontSize = 14.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenPicker() }.padding(vertical = 4.dp)
+                )
+            }
+        }
+    }
+
+    if (pendingType != null) {
+        AlertDialog(
+            onDismissRequest = { pendingType = null },
+            containerColor = SurfaceDark,
+            title = { Text("Switch day type?", color = Color.White, fontFamily = myCustomFont) },
+            text = { Text("This will clear Day $day's current exercises.", color = TextGray, fontFamily = myCustomFont) },
+            confirmButton = {
+                TextButton(onClick = { onSetType(pendingType!!); pendingType = null }) {
+                    Text("Switch", color = AccentYellow, fontFamily = myCustomFont)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingType = null }) {
+                    Text("Cancel", color = TextGray, fontFamily = myCustomFont)
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+        )
+    }
+}
 
-        // Choose-exercises — a plain left-aligned text link (secondary action,
-        // deliberately quieter than the muscle toggle pills above).
-        if (daySelection.isNotEmpty()) {
-            val totalSelected = daySelection.values.sumOf { it.exerciseIds.size }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Choose exercises ($totalSelected selected) ›",
-                color = AccentYellow,
-                fontFamily = myCustomFont,
-                fontSize = 14.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenPicker() }
-                    .padding(vertical = 4.dp)
-            )
-        }
+@Composable
+private fun MuscleTab(label: String, count: Int, active: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .border(1.5.dp, if (active) AccentYellow else Color.Gray, RoundedCornerShape(16.dp))
+            .background(if (active) AccentYellow.copy(alpha = 0.15f) else Color.Transparent, RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = if (active) AccentYellow else Color.White, fontFamily = myCustomFont, fontSize = 13.sp)
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("$count", color = if (count > 0) AccentYellow else Color.Gray, fontFamily = myCustomFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
 private fun StepperButton(label: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier
-            .size(28.dp)
-            .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
-            .clickable { onClick() },
+        modifier = Modifier.size(28.dp).border(1.dp, Color.Gray, RoundedCornerShape(6.dp)).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(label, color = Color.White, fontFamily = myCustomFont, fontSize = 18.sp)
@@ -596,19 +525,10 @@ private fun CheckboxBox(checked: Boolean) {
     Box(
         modifier = Modifier
             .size(20.dp)
-            .border(
-                width = 1.5.dp,
-                color = if (checked) AccentYellow else Color.Gray,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .background(
-                color = if (checked) AccentYellow else Color.Transparent,
-                shape = RoundedCornerShape(4.dp)
-            ),
+            .border(1.5.dp, if (checked) AccentYellow else Color.Gray, RoundedCornerShape(4.dp))
+            .background(if (checked) AccentYellow else Color.Transparent, RoundedCornerShape(4.dp)),
         contentAlignment = Alignment.Center
     ) {
-        if (checked) {
-            Text("✓", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
+        if (checked) Text("✓", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }

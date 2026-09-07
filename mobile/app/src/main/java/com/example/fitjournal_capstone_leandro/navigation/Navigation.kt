@@ -35,7 +35,7 @@ import com.example.fitjournal_capstone_leandro.ui.home.HomeScreen
 import com.example.fitjournal_capstone_leandro.ui.home.HomeViewModel
 import com.example.fitjournal_capstone_leandro.ui.profile.ProfileSettingsScreen
 import com.example.fitjournal_capstone_leandro.ui.profile.ProfileSettingsViewModel
-import com.example.fitjournal_capstone_leandro.ui.routine.ExercisePickerScreen
+import com.example.fitjournal_capstone_leandro.ui.routine.RoutineExercisePickerRoute
 import com.example.fitjournal_capstone_leandro.ui.routine.RoutineScreen
 import com.example.fitjournal_capstone_leandro.ui.routine.RoutineViewModel
 import com.example.fitjournal_capstone_leandro.ui.workout.WorkoutViewModel
@@ -113,7 +113,7 @@ fun AppNavigation(
             arguments = listOf(navArgument("day") { type = NavType.IntType })
         ) { backStackEntry ->
             val day = backStackEntry.arguments?.getInt("day") ?: 1
-            ExercisePickerScreen(
+            RoutineExercisePickerRoute(
                 viewModel = routineViewModel,
                 day = day,
                 onDone = { navController.popBackStack() },

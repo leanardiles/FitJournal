@@ -1,6 +1,6 @@
 package com.example.fitjournal_capstone_leandro.data.repository
 
-import com.example.fitjournal_capstone_leandro.data.model.MusclePool
+import com.example.fitjournal_capstone_leandro.data.model.DaySave
 import com.example.fitjournal_capstone_leandro.data.model.RoutineResponse
 import com.example.fitjournal_capstone_leandro.data.model.RoutineSetupRequest
 import com.example.fitjournal_capstone_leandro.data.model.TrainingDayMuscleRequest
@@ -14,24 +14,16 @@ class UserRoutineRepository(
 ) : IUserRoutineRepository {
     private val apiService = RetrofitClient.apiService
 
-    /**
-     * Get user's current routine (new training-day shape).
-     */
     override suspend fun getRoutine(): Result<RoutineResponse> {
         return try {
             val userId = tokenManager.getUserId()
             if (userId == -1) return Result.failure(Exception("No user logged in"))
-            val routine = apiService.getRoutine(userId)
-            Result.success(routine)
+            Result.success(apiService.getRoutine(userId))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    /**
-     * The user's exercise library — used to populate the routine editor's
-     * exercise picker (grouped by muscle by the caller).
-     */
     override suspend fun getExercises(): Result<List<UserExercise>> {
         return try {
             val userId = tokenManager.getUserId()
@@ -43,30 +35,40 @@ class UserRoutineRepository(
     }
 
     /**
-     * Save the user's routine. The editor now sends an explicit per-muscle pool
-     * (the chosen exercises) and a per-muscle count for each day, so this just
-     * maps that into the training-day request shape. per_muscle days only.
+     * Save the user's routine. Each day is either per_muscle (muscle pools +
+     * counts) or manual (a flat exercise list); map each into the training-day
+     * request shape accordingly.
      *
-     * @param days day_number -> the per-muscle pools chosen for that day.
+     * @param days day_number -> that day's save payload.
      */
-    override suspend fun saveRoutine(days: Map<Int, List<MusclePool>>): Result<Unit> {
+    override suspend fun saveRoutine(days: Map<Int, DaySave>): Result<Unit> {
         return try {
             val userId = tokenManager.getUserId()
             if (userId == -1) return Result.failure(Exception("No user logged in"))
 
-            val dayRequests = days.toSortedMap().map { (dayNumber, pools) ->
-                TrainingDayRequest(
-                    day_number = dayNumber,
-                    day_type = "per_muscle",
-                    name = null,
-                    muscles = pools.map {
-                        TrainingDayMuscleRequest(
-                            muscle_group = it.muscle_group,
-                            exercise_count = it.exercise_count
-                        )
-                    },
-                    exercise_ids = pools.flatMap { it.exercise_ids }.distinct()
-                )
+            val dayRequests = days.toSortedMap().map { (dayNumber, d) ->
+                if (d.day_type == "manual") {
+                    TrainingDayRequest(
+                        day_number = dayNumber,
+                        day_type = "manual",
+                        name = null,
+                        muscles = emptyList(),
+                        exercise_ids = d.exercise_ids.distinct()
+                    )
+                } else {
+                    TrainingDayRequest(
+                        day_number = dayNumber,
+                        day_type = "per_muscle",
+                        name = null,
+                        muscles = d.pools.map {
+                            TrainingDayMuscleRequest(
+                                muscle_group = it.muscle_group,
+                                exercise_count = it.exercise_count
+                            )
+                        },
+                        exercise_ids = d.pools.flatMap { it.exercise_ids }.distinct()
+                    )
+                }
             }
 
             apiService.saveRoutine(userId, RoutineSetupRequest(days = dayRequests))
@@ -76,9 +78,6 @@ class UserRoutineRepository(
         }
     }
 
-    /**
-     * Delete user's routine
-     */
     override suspend fun deleteRoutine(): Result<Unit> {
         return try {
             val userId = tokenManager.getUserId()
